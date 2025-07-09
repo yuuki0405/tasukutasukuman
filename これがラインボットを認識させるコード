@@ -1,0 +1,75 @@
+const express = require('express');
+const line = require('@line/bot-sdk');
+const { createClient } = require('@supabase/supabase-js');
+
+const config = {
+  channelAccessToken: 'LINE_CHANNEL_ACCESS_TOKEN',
+  channelSecret: 'LINE_CHANNEL_SECRET'
+};
+
+const supabase = createClient(
+  'https://bteklaezhlfmjylybrlh.supabase.co',
+  'SUPABASE_SERVICE_ROLE_KEY'
+);
+
+const client = new line.Client(config);
+const app = express();
+app.use(express.json());
+
+// Webアプリからタスク追加
+app.post('/add-task', async (req, res) => {
+  const { task, userId, deadline } = req.body;
+  // deadline: "YYYY-MM-DD HH:mm"
+  const [date, time] = deadline.split(' ');
+  const { error } = await supabase
+    .from('todos')
+    .insert([{ task, user_id: userId, date, time }]);
+  if (error) {
+    return res.status(500).json({ error: 'DB保存失敗' });
+  }
+  res.json({ success: true });
+});
+
+// Webアプリからタスク一覧取得
+app.get('/get-tasks', async (req, res) => {
+  const { data, error } = await supabase
+    .from('todos')
+    .select('*')
+    .order('date', { ascending: true });
+  if (error) {
+    return res.status(500).json({ error: 'DB取得失敗' });
+  }
+  res.json(data);
+});
+
+// LINE webhook
+app.post('/webhook', line.middleware(config), async (req, res) => {
+  const events = req.body.events;
+  for (const event of events) {
+    if (event.type === 'message' && event.message.text === '進捗確認') {
+      const { data, error } = await supabase
+        .from('todos')
+        .select('*')
+        .order('date', { ascending: true });
+
+      let replyText = '';
+      if (error || !data || data.length === 0) {
+        replyText = 'タスクはありません。';
+      } else {
+        replyText = data.map(t =>
+          `・${t.task}（${t.date} ${t.time}）`
+        ).join('\n');
+      }
+
+      await client.replyMessage(event.replyToken, {
+        type: 'text',
+        text: replyText
+      });
+    }
+  }
+  res.sendStatus(200);
+});
+
+app.listen(3000, () => {
+  console.log('Server running on port 3000');
+});
