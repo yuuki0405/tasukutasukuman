@@ -16,5 +16,10 @@
     "url": "https://github.com/yuuki0405/tasukutasukuman/issues"
   },
   "homepage": "https://github.com/yuuki0405/tasukutasukuman#readme",
-  "description": ""
+  "description": "",
+  "dependencies": {
+    "@line/bot-sdk": "^10.0.0",
+    "express": "^5.1.0",
+    "sqlite3": "^5.1.7"
+  }
 }
