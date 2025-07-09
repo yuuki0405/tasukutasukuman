@@ -1,72 +1,47 @@
 const express = require('express');
-const { Client, middleware } = require('@line/bot-sdk');
-const db = require('./db');
+const line = require('@line/bot-sdk');
+const { createClient } = require('@supabase/supabase-js');
 
 const config = {
-  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.CHANNEL_SECRET
+  channelAccessToken: 'LINE_CHANNEL_ACCESS_TOKEN',
+  channelSecret: 'LINE_CHANNEL_SECRET'
 };
 
-const client = new Client(config);
+const supabase = createClient(
+  'https://bteklaezhlfmjylybrlh.supabase.co',
+  'SUPABASE_SERVICE_ROLE_KEY' // サーバー用のキー
+);
+
+const client = new line.Client(config);
 const app = express();
 
-// webhookエンドポイント
-app.post('/webhook', middleware(config), (req, res) => {
-  Promise.all(req.body.events.map(handleEvent))
-    .then((result) => res.json(result));
+app.post('/webhook', line.middleware(config), async (req, res) => {
+  const events = req.body.events;
+  for (const event of events) {
+    if (event.type === 'message' && event.message.text === '進捗確認') {
+      // タスク一覧を取得
+      const { data, error } = await supabase
+        .from('todos')
+        .select('*')
+        .order('date', { ascending: true });
+
+      let replyText = '';
+      if (error || !data || data.length === 0) {
+        replyText = 'タスクはありません。';
+      } else {
+        replyText = data.map(t =>
+          `・${t.task}（${t.date} ${t.time}）`
+        ).join('\n');
+      }
+
+      // LINEに返信
+      await client.replyMessage(event.replyToken, {
+        type: 'text',
+        text: replyText
+      });
+    }
+  }
+  res.sendStatus(200);
 });
 
-// LINE Bot イベントハンドラー
-function handleEvent(event) {
-  if (event.type !== 'message' || event.message.type !== 'text') {
-    return Promise.resolve(null);
-  }
-
-  const userId = event.source.userId;
-  const text = event.message.text;
-
-  if (text.startsWith('タスク追加 ')) {
-    const task = text.replace('タスク追加 ', '');
-    return new Promise((resolve) => {
-      db.run(
-        "INSERT INTO tasks (userId, task, status) VALUES (?, ?, ?)",
-        [userId, task, '未完了'],
-        (err) => {
-          const reply = err
-            ? { type: 'text', text: 'タスクの追加に失敗しました。' }
-            : { type: 'text', text: 'タスクを追加しました！' };
-          resolve(client.replyMessage(event.replyToken, reply));
-        }
-      );
-    });
-  } else if (text === '進捗確認') {
-    return new Promise((resolve, reject) => {
-      db.all(
-        "SELECT task, status FROM tasks WHERE userId = ?",
-        [userId],
-        (err, rows) => {
-          if (err) return reject(err);
-
-          const textMsg = rows.length === 0
-            ? 'タスクはありません。'
-            : rows.map(r => `${r.task} : ${r.status}`).join('\n');
-
-          resolve(client.replyMessage(event.replyToken, {
-            type: 'text',
-            text: textMsg
-          }));
-        }
-      );
-    });
-  } else {
-    return client.replyMessage(event.replyToken, {
-      type: 'text',
-      text: '「タスク追加 ○○」または「進捗確認」と送信してください。'
-    });
-  }
-}
-
-// ポート起動
-app.listen(3000, () => {
-  console.log('Server running');
-});
+app.listen(3000);
