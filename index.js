@@ -3,7 +3,7 @@ const line = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const bodyParser = require('body-parser');
 
-// LINE Bot設定
+// LINE Bot設定（.envで管理）
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.CHANNEL_SECRET
@@ -12,14 +12,14 @@ const config = {
 const client = new line.Client(config);
 const app = express();
 
-// LINE SDKが署名検証に使う rawBody を取得
+// LINE SDKの署名検証用 rawBody を取得
 app.use(bodyParser.json({
   verify: (req, res, buf) => {
     req.rawBody = buf.toString();
   }
 }));
 
-// Supabaseクライアントの初期化
+// Supabaseの初期化
 const supabase = createClient(
   'https://bteklaezhlfmjylybrlh.supabase.co',
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -35,8 +35,11 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     const userId = event.source.userId;
     const text = event.message.text.trim();
 
-    // LINEユーザーをDBに登録（初回のみ）
-    await supabase.from('line_users').upsert({ user_id: userId, notify: true });
+    // 🔹 user_settings に自動登録（重複無視）
+    await supabase.from('user_settings').upsert({
+      user_id: userId,
+      notify: true
+    });
 
     if (text.startsWith('タスク追加 ')) {
       const taskContent = text.replace('タスク追加 ', '');
@@ -54,6 +57,20 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         : 'タスクを追加しました！';
 
       await client.replyMessage(event.replyToken, { type: 'text', text: reply });
+
+      // 通知設定確認 & LINE通知
+      const { data: settings } = await supabase
+        .from('user_settings')
+        .select('notify')
+        .eq('user_id', userId)
+        .single();
+
+      if (settings?.notify) {
+        await client.pushMessage(userId, {
+          type: 'text',
+          text: `🆕 タスク: ${taskContent}\n締切: 未定`
+        });
+      }
     }
 
     else if (text === '進捗確認') {
@@ -89,7 +106,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   res.sendStatus(200);
 });
 
-// 🌐 Webからのタスク追加処理
+// 🌐 Webからタスク追加
 app.post('/add-task', async (req, res) => {
   const { task, deadline, userId } = req.body;
 
@@ -99,8 +116,11 @@ app.post('/add-task', async (req, res) => {
 
   const [date, time] = deadline?.split(' ') || [null, null];
 
-  // LINEユーザーが未登録なら追加
-  await supabase.from('line_users').upsert({ user_id: userId, notify: true });
+  // 🔹 user_settings に自動登録
+  await supabase.from('user_settings').upsert({
+    user_id: userId,
+    notify: true
+  });
 
   const { error } = await supabase.from('todos').insert({
     user_id: userId,
@@ -115,15 +135,16 @@ app.post('/add-task', async (req, res) => {
     return res.status(500).json({ error: '登録失敗' });
   }
 
-  // 通知対象者一覧取得 → 一斉通知
+  // 通知設定確認 & LINE通知
   try {
-    const { data: recipients } = await supabase
-      .from('line_users')
-      .select('user_id')
-      .eq('notify', true);
+    const { data: settings } = await supabase
+      .from('user_settings')
+      .select('notify')
+      .eq('user_id', userId)
+      .single();
 
-    for (const user of recipients) {
-      await client.pushMessage(user.user_id, {
+    if (settings?.notify) {
+      await client.pushMessage(userId, {
         type: 'text',
         text: `🆕 タスク: ${task}\n締切: ${deadline || '未定'}`
       });
@@ -135,7 +156,7 @@ app.post('/add-task', async (req, res) => {
   res.json({ success: true, message: 'タスクを追加しました！' });
 });
 
-// 🌐 Webからタスク取得（ログインユーザー用）
+// 🌐 Webからタスク取得
 app.get('/get-tasks', async (req, res) => {
   const userId = req.query.userId;
 
