@@ -3,7 +3,7 @@ const line = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const bodyParser = require('body-parser');
 
-// LINE Bot設定（環境変数で管理）
+// LINE Bot設定（.envに保存する）
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.CHANNEL_SECRET
@@ -12,26 +12,22 @@ const config = {
 const client = new line.Client(config);
 const app = express();
 
-// JSONの読み取り＋署名検証のために rawBody 取得
+// Supabase初期化
+const supabase = createClient(
+  'https://bteklaezhlfmjylybrlh.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+// JSONリクエスト取得
 app.use(bodyParser.json({
   verify: (req, res, buf) => {
     req.rawBody = buf.toString();
   }
 }));
 
-// Supabase接続
-const supabase = createClient(
-  'https://bteklaezhlfmjylybrlh.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-// 📨 共通登録処理
-const registerUserData = async (userId) => {
-  await supabase.from('user_settings').upsert({
-    user_id: userId,
-    notify: true
-  });
-
+// 🧩 ユーザー情報自動登録処理（共通）
+const ensureUserRegistered = async (userId) => {
+  await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
   await supabase.from('user_profile').upsert({
     user_id: userId,
     name: '',
@@ -50,8 +46,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     const userId = event.source.userId;
     const text = event.message.text.trim();
 
-    // 初回登録処理
-    await registerUserData(userId);
+    await ensureUserRegistered(userId);
 
     if (text.startsWith('タスク追加 ')) {
       const taskContent = text.replace('タスク追加 ', '');
@@ -127,8 +122,7 @@ app.post('/add-task', async (req, res) => {
 
   const [date, time] = deadline?.split(' ') || [null, null];
 
-  // ユーザー情報の初期登録
-  await registerUserData(userId);
+  await ensureUserRegistered(userId);
 
   const { error } = await supabase.from('todos').insert({
     user_id: userId,
