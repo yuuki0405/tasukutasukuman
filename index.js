@@ -25,7 +25,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// 🔔 LINE Webhook
+// 🔔 LINE Webhook処理
 app.post('/webhook', line.middleware(config), async (req, res) => {
   const events = req.body.events;
 
@@ -52,7 +52,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
       await client.replyMessage(event.replyToken, { type: 'text', text: reply });
 
-      // ✅ 通知設定を確認して送信
+      // 通知設定の確認と送信
       const { data: settings } = await supabase
         .from('user_settings')
         .select('notify')
@@ -100,9 +100,14 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   res.sendStatus(200);
 });
 
-// 🌐 Webアプリからタスク追加（通知あり）
+// 🌐 Webからタスク追加
 app.post('/add-task', async (req, res) => {
-  const { task, deadline, userId = 'web-user' } = req.body;
+  const { task, deadline, userId } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'userIdが必要です' });
+  }
+
   const [date, time] = deadline?.split(' ') || [null, null];
 
   const { error } = await supabase.from('todos').insert({
@@ -118,21 +123,19 @@ app.post('/add-task', async (req, res) => {
     return res.status(500).json({ error: '登録失敗' });
   }
 
-  // ✅ 通知設定を確認して送信
+  // 通知設定を確認して送信
   try {
-    if (userId !== 'web-user') {
-      const { data: settings } = await supabase
-        .from('user_settings')
-        .select('notify')
-        .eq('user_id', userId)
-        .single();
+    const { data: settings } = await supabase
+      .from('user_settings')
+      .select('notify')
+      .eq('user_id', userId)
+      .single();
 
-      if (settings?.notify) {
-        await client.pushMessage(userId, {
-          type: 'text',
-          text: `🆕 タスク: ${task}\n締切: ${deadline || '未定'}`
-        });
-      }
+    if (settings?.notify) {
+      await client.pushMessage(userId, {
+        type: 'text',
+        text: `🆕 タスク: ${task}\n締切: ${deadline || '未定'}`
+      });
     }
   } catch (err) {
     console.warn('LINE通知エラー:', err.message);
@@ -141,9 +144,13 @@ app.post('/add-task', async (req, res) => {
   res.json({ success: true, message: 'タスクを追加しました！' });
 });
 
-// 🌐 Webアプリからタスク取得
+// 🌐 Webからタスク取得
 app.get('/get-tasks', async (req, res) => {
-  const userId = req.query.userId || 'web-user';
+  const userId = req.query.userId;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'userIdが必要です' });
+  }
 
   const { data, error } = await supabase
     .from('todos')
