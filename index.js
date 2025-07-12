@@ -2,7 +2,7 @@ const express = require('express');
 const line = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 
-// 環境変数から情報を取得（.envに設定しておくと安全）
+// 環境変数から情報を取得（.env に設定しておくと安全）
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.CHANNEL_SECRET
@@ -32,7 +32,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       const taskContent = text.replace('タスク追加 ', '');
 
       const { error } = await supabase.from('todos').insert({
-        userid: userId,
+        user_id: userId, // ← 修正済み
         task: taskContent,
         status: '未完了',
         date: null,
@@ -50,7 +50,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       const { data, error } = await supabase
         .from('todos')
         .select('*')
-        .eq('userid', userId)
+        .eq('user_id', userId) // ← 修正済み
         .order('date', { ascending: true });
 
       let replyText = '';
@@ -87,7 +87,7 @@ app.post('/add-task', async (req, res) => {
   const [date, time] = deadline?.split(' ') || [null, null];
 
   const { error } = await supabase.from('todos').insert({
-    userid: userId,
+    user_id: userId, // ← 修正済み
     task,
     status: '未完了',
     date,
@@ -121,7 +121,7 @@ app.get('/get-tasks', async (req, res) => {
   const { data, error } = await supabase
     .from('todos')
     .select('*')
-    .eq('userid', userId)
+    .eq('user_id', userId) // ← 修正済み
     .order('date', { ascending: true });
 
   if (error) {
@@ -137,3 +137,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+
