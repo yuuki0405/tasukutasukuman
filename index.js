@@ -2,7 +2,7 @@ const express = require('express');
 const line = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 
-// 環境変数から情報を取得（.env に設定しておくと安全）
+// 環境変数から情報を取得
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.CHANNEL_SECRET
@@ -32,7 +32,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       const taskContent = text.replace('タスク追加 ', '');
 
       const { error } = await supabase.from('todos').insert({
-        user_id: userId, // ← 修正済み
+        user_id: userId,
         task: taskContent,
         status: '未完了',
         date: null,
@@ -44,13 +44,27 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         : 'タスクを追加しました！';
 
       await client.replyMessage(event.replyToken, { type: 'text', text: reply });
+
+      // 通知設定の確認 & 通知送信
+      const { data: settings, error: settingsError } = await supabase
+        .from('user_settings')
+        .select('notify')
+        .eq('user_id', userId)
+        .single();
+
+      if (settings?.notify) {
+        await client.pushMessage(userId, {
+          type: 'text',
+          text: `🆕 タスク: ${taskContent}\n締切: 未定`
+        });
+      }
     }
 
     else if (text === '進捗確認') {
       const { data, error } = await supabase
         .from('todos')
         .select('*')
-        .eq('user_id', userId) // ← 修正済み
+        .eq('user_id', userId)
         .order('date', { ascending: true });
 
       let replyText = '';
@@ -83,11 +97,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 // 🌐 Webアプリからのタスク追加
 app.post('/add-task', async (req, res) => {
   const { task, deadline, userId = 'web-user' } = req.body;
-
   const [date, time] = deadline?.split(' ') || [null, null];
 
   const { error } = await supabase.from('todos').insert({
-    user_id: userId, // ← 修正済み
+    user_id: userId,
     task,
     status: '未完了',
     date,
@@ -99,13 +112,21 @@ app.post('/add-task', async (req, res) => {
     return res.status(500).json({ error: '登録失敗' });
   }
 
-  // LINE通知も同時に送る（userIdがBotのLINE IDなら通知）
+  // ユーザー設定に応じて通知
   try {
     if (userId !== 'web-user') {
-      await client.pushMessage(userId, {
-        type: 'text',
-        text: `🆕 タスク: ${task}\n締切: ${deadline || '未定'}`
-      });
+      const { data: settings, error: settingsError } = await supabase
+        .from('user_settings')
+        .select('notify')
+        .eq('user_id', userId)
+        .single();
+
+      if (settings?.notify) {
+        await client.pushMessage(userId, {
+          type: 'text',
+          text: `🆕 タスク: ${task}\n締切: ${deadline || '未定'}`
+        });
+      }
     }
   } catch (err) {
     console.warn('LINE通知エラー:', err.message);
@@ -121,7 +142,7 @@ app.get('/get-tasks', async (req, res) => {
   const { data, error } = await supabase
     .from('todos')
     .select('*')
-    .eq('user_id', userId) // ← 修正済み
+    .eq('user_id', userId)
     .order('date', { ascending: true });
 
   if (error) {
