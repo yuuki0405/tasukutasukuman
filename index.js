@@ -1,105 +1,78 @@
-// index.js
-require('dotenv').config();  // ① dotenv を最初に読み込む
-
 const express = require('express');
-const line   = require('@line/bot-sdk');
+const line = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const bodyParser = require('body-parser');
 
-// ② LINE Bot 設定（.env から読み込む）
-const lineConfig = {
+// LINE Bot設定（.envで管理）
+const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
-  channelSecret:       process.env.CHANNEL_SECRET
+  channelSecret: process.env.CHANNEL_SECRET
 };
-const lineClient = new line.Client(lineConfig);
 
-// ③ Supabase クライアント初期化（.env から読み込む）
+const client = new line.Client(config);
+const app = express();
+
+// LINE SDKの署名検証用 rawBody を取得
+app.use(bodyParser.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
+
+// Supabaseの初期化
 const supabase = createClient(
-  process.env.SUPABASE_URL,
+  'https://bteklaezhlfmjylybrlh.supabase.co',
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const app = express();
-
-// ④ JSON + rawBody 取得（LINE 署名検証用）
-app.use(bodyParser.json({
-  verify: (req, res, buf) => { req.rawBody = buf.toString(); }
-}));
-
-// ─────────────────────────────────────
-// 共通：ユーザー情報を upsert する
-//    ・user_settings (notify:true)
-//    ・user_profile  (name, group, created_at)
-// ─────────────────────────────────────
-async function ensureUserRegistered(userId) {
-  // 通知設定
-  const { error: err1 } = await supabase
-    .from('user_settings')
-    .upsert({ user_id: userId, notify: true });
-  if (err1) console.error('user_settings upsert error:', err1);
-
-  // プロフィール
-  const { error: err2 } = await supabase
-    .from('user_profile')
-    .upsert({
-      user_id:   userId,
-      name:      '',
-      group:     '',
-      created_at: new Date()
-    });
-  if (err2) console.error('user_profile upsert error:', err2);
-}
-
-// ─────────────────────────────────────
-// 1) LINE Webhook エンドポイント
-// ─────────────────────────────────────
-app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
-  const events = req.body.events || [];
-  console.log(`Received ${events.length} event(s)`);
+// 🔔 LINE Webhook
+app.post('/webhook', line.middleware(config), async (req, res) => {
+  const events = req.body.events;
 
   for (const event of events) {
     if (event.type !== 'message' || event.message.type !== 'text') continue;
 
     const userId = event.source.userId;
-    const text   = event.message.text.trim();
-    console.log(`From ${userId}: "${text}"`);
+    const text = event.message.text.trim();
 
-    // 初回登録 upsert
-    await ensureUserRegistered(userId);
+    // 🔹 user_settings に自動登録（重複無視）
+    await supabase.from('user_settings').upsert({
+      user_id: userId,
+      notify: true
+    });
 
-    // 「タスク追加 ○○」
     if (text.startsWith('タスク追加 ')) {
-      const taskContent = text.slice(6).trim();
+      const taskContent = text.replace('タスク追加 ', '');
+
       const { error } = await supabase.from('todos').insert({
         user_id: userId,
-        task:    taskContent,
-        status:  '未完了',
-        date:    null,
-        time:    null
+        task: taskContent,
+        status: '未完了',
+        date: null,
+        time: null
       });
 
-      const replyMsg = error
+      const reply = error
         ? 'タスクの追加に失敗しました。'
         : 'タスクを追加しました！';
-      await lineClient.replyMessage(event.replyToken, {
-        type: 'text',
-        text: replyMsg
-      });
 
-      // 通知送信
+      await client.replyMessage(event.replyToken, { type: 'text', text: reply });
+
+      // 通知設定確認 & LINE通知
       const { data: settings } = await supabase
         .from('user_settings')
         .select('notify')
         .eq('user_id', userId)
         .single();
+
       if (settings?.notify) {
-        await lineClient.pushMessage(userId, {
+        await client.pushMessage(userId, {
           type: 'text',
           text: `🆕 タスク: ${taskContent}\n締切: 未定`
         });
       }
     }
-    // 「進捗確認」
+
     else if (text === '進捗確認') {
       const { data, error } = await supabase
         .from('todos')
@@ -107,28 +80,23 @@ app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
         .eq('user_id', userId)
         .order('date', { ascending: true });
 
-      if (error) {
-        console.error('Fetch todos error:', error);
-        await lineClient.replyMessage(event.replyToken, {
-          type: 'text',
-          text: 'タスクの取得中にエラーが発生しました。'
-        });
-        continue;
+      let replyText = '';
+      if (error || !data || data.length === 0) {
+        replyText = '現在タスクは登録されていません。';
+      } else {
+        replyText = data.map(t =>
+          `✅ ${t.task}（${t.date || '未定'} ${t.time || ''}） - ${t.status}`
+        ).join('\n');
       }
 
-      const replyText = (!data || data.length === 0)
-        ? '現在タスクは登録されていません。'
-        : data.map(t => `✅ ${t.task}（${t.date||'未定'} ${t.time||''}） - ${t.status}`)
-              .join('\n');
-
-      await lineClient.replyMessage(event.replyToken, {
+      await client.replyMessage(event.replyToken, {
         type: 'text',
         text: replyText
       });
     }
-    // それ以外
+
     else {
-      await lineClient.replyMessage(event.replyToken, {
+      await client.replyMessage(event.replyToken, {
         type: 'text',
         text: '「タスク追加 ○○」または「進捗確認」と送信してください。'
       });
@@ -138,73 +106,80 @@ app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
   res.sendStatus(200);
 });
 
-// ─────────────────────────────────────
-// 2) Web からタスク追加エンドポイント
-// ─────────────────────────────────────
+// 🌐 Webからタスク追加
 app.post('/add-task', async (req, res) => {
-  const { userId, task, deadline } = req.body;
-  console.log('/add-task', { userId, task, deadline });
+  const { task, deadline, userId } = req.body;
 
   if (!userId) {
     return res.status(400).json({ error: 'userIdが必要です' });
   }
-  const [date, time] = (deadline || '').split(' ');
 
-  await ensureUserRegistered(userId);
+  const [date, time] = deadline?.split(' ') || [null, null];
+
+  // 🔹 user_settings に自動登録
+  await supabase.from('user_settings').upsert({
+    user_id: userId,
+    notify: true
+  });
 
   const { error } = await supabase.from('todos').insert({
     user_id: userId,
     task,
     status: '未完了',
-    date:   date || null,
-    time:   time || null
+    date,
+    time
   });
+
   if (error) {
-    console.error('todos.insert error:', error);
-    return res.status(500).json({ error: 'タスク登録に失敗しました' });
+    console.error('Supabase登録失敗:', error.message);
+    return res.status(500).json({ error: '登録失敗' });
   }
 
-  const { data: settings } = await supabase
-    .from('user_settings')
-    .select('notify')
-    .eq('user_id', userId)
-    .single();
-  if (settings?.notify) {
-    await lineClient.pushMessage(userId, {
-      type: 'text',
-      text: `🆕 タスク: ${task}\n締切: ${deadline || '未定'}`
-    });
+  // 通知設定確認 & LINE通知
+  try {
+    const { data: settings } = await supabase
+      .from('user_settings')
+      .select('notify')
+      .eq('user_id', userId)
+      .single();
+
+    if (settings?.notify) {
+      await client.pushMessage(userId, {
+        type: 'text',
+        text: `🆕 タスク: ${task}\n締切: ${deadline || '未定'}`
+      });
+    }
+  } catch (err) {
+    console.warn('LINE通知エラー:', err.message);
   }
 
   res.json({ success: true, message: 'タスクを追加しました！' });
 });
 
-// ─────────────────────────────────────
-// 3) Web からタスク取得エンドポイント
-// ─────────────────────────────────────
+// 🌐 Webからタスク取得
 app.get('/get-tasks', async (req, res) => {
   const userId = req.query.userId;
-  console.log('/get-tasks userId=', userId);
 
   if (!userId) {
     return res.status(400).json({ error: 'userIdが必要です' });
   }
+
   const { data, error } = await supabase
     .from('todos')
     .select('*')
     .eq('user_id', userId)
     .order('date', { ascending: true });
+
   if (error) {
-    console.error('todos.select error:', error);
-    return res.status(500).json({ error: 'タスク取得に失敗しました' });
+    console.error('取得エラー:', error.message);
+    return res.status(500).json({ error: '取得失敗' });
   }
+
   res.json({ tasks: data });
 });
 
-// ─────────────────────────────────────
-// サーバー起動
-// ─────────────────────────────────────
+// ✅ 起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
