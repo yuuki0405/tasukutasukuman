@@ -1,10 +1,10 @@
 require('dotenv').config();
 
-const express = require('express');
+const express    = require('express');
 const bodyParser = require('body-parser');
 const { createClient } = require('@supabase/supabase-js');
-const line = require('@line/bot-sdk');
-const cron = require('node-cron');
+const line       = require('@line/bot-sdk');
+const cron       = require('node-cron');
 
 // 環境変数読み込み
 const {
@@ -14,6 +14,10 @@ const {
   SUPABASE_SERVICE_ROLE_KEY,
   PORT = 3000
 } = process.env;
+
+// 起動時に環境変数をログ出力
+console.log('SUPABASE_URL=', SUPABASE_URL);
+console.log('SUPABASE_KEY=', SUPABASE_SERVICE_ROLE_KEY?.slice(0,5) + '...');
 
 // LINE Client 初期化
 const lineConfig = {
@@ -25,44 +29,47 @@ const lineClient = new line.Client(lineConfig);
 // Supabase Client 初期化
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// Express アプリ初期化
+// Express アプリ準備
 const app = express();
-
-// LINE 署名検証用の rawBody 取得
 app.use(bodyParser.json({
-  verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
-  }
+  verify: (req, res, buf) => { req.rawBody = buf.toString(); }
 }));
 
-// ── 定期爆撃通知 (毎朝9:00) ──
+// ── 定期爆撃通知 ──
+// 毎朝9:00に全未完了タスクをユーザーごとに通知
 cron.schedule('0 9 * * *', async () => {
+  console.log('[Cron] 定期通知開始');
   try {
-    // 「未完了」タスクをすべて取得
-    const { data: tasks, error } = await supabase
+    const { data: tasks, error: selErr } = await supabase
       .from('todos')
       .select('*')
       .eq('status', '未完了')
       .order('date', { ascending: true });
 
-    if (error) throw error;
+    if (selErr) {
+      console.error('[Supabase][SELECT] Error fetching todos:', selErr);
+      return;
+    }
+    console.log('[Supabase][SELECT] Fetched', tasks.length, 'tasks');
 
-    // ユーザーごとにグルーピング
+    // user_id ごとにグループ化
     const byUser = tasks.reduce((acc, t) => {
-      acc[t.user_id] = acc[t.user_id] || [];
-      acc[t.user_id].push(t);
+      (acc[t.user_id] = acc[t.user_id] || []).push(t);
       return acc;
     }, {});
 
-    // 各ユーザーへ通知
     for (const [userId, list] of Object.entries(byUser)) {
-      // 通知設定をチェック
-      const { data: settings } = await supabase
+      // 通知ON設定を取得
+      const { data: settings, error: cfgErr } = await supabase
         .from('user_settings')
         .select('notify')
         .eq('user_id', userId)
         .single();
 
+      if (cfgErr) {
+        console.error('[Supabase][SELECT] user_settings error:', cfgErr);
+        continue;
+      }
       if (!settings?.notify) continue;
 
       for (const t of list) {
@@ -73,67 +80,72 @@ cron.schedule('0 9 * * *', async () => {
       }
     }
 
-    console.log('定期通知: 成功');
+    console.log('[Cron] 定期通知完了');
   } catch (err) {
-    console.error('定期通知: エラー', err);
+    console.error('[Cron] Unexpected error:', err);
   }
 });
 
 // ── LINE Webhook ──
 app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
   const events = req.body.events || [];
-
   for (const event of events) {
     if (event.type !== 'message' || event.message.type !== 'text') continue;
-
     const userId = event.source.userId;
-    const text = event.message.text.trim();
+    const text   = event.message.text.trim();
 
-    // 通知ON を保証
+    // 通知ONを保証
     await supabase.from('user_settings').upsert({
       user_id: userId,
       notify: true
     });
 
-    // タスク追加
+    // タスク追加コマンド
     if (text.startsWith('タスク追加 ')) {
       const taskContent = text.replace('タスク追加 ', '');
 
-      // Supabase に登録
-      const { error: insertError } = await supabase.from('todos').insert({
-        user_id: userId,
-        task: taskContent,
-        status: '未完了',
-        date: null,
-        time: null
-      });
-      if (insertError) {
+      // INSERT
+      const { data: insData, error: insErr } = await supabase
+        .from('todos')
+        .insert({
+          user_id: userId,
+          task: taskContent,
+          status: '未完了',
+          date: null,
+          time: null
+        });
+
+      if (insErr) {
+        console.error('[Supabase][INSERT] Error inserting todo:', insErr);
         await lineClient.replyMessage(event.replyToken, {
           type: 'text',
-          text: 'タスク登録に失敗しました😭'
+          text: 'タスク登録に失敗しました。'
         });
         continue;
       }
+      console.log('[Supabase][INSERT] Inserted:', insData);
 
-      // 全タスク取得
-      const { data: allTasks, error: fetchError } = await supabase
+      // 全タスク取得（SELECT）
+      const { data: allTasks, error: selErr } = await supabase
         .from('todos')
         .select('*')
         .eq('user_id', userId)
         .order('date', { ascending: true });
 
-      if (fetchError) {
+      if (selErr) {
+        console.error('[Supabase][SELECT] Error fetching todos:', selErr);
         await lineClient.replyMessage(event.replyToken, {
           type: 'text',
-          text: 'タスク一覧取得に失敗しました…'
+          text: 'タスク一覧取得に失敗しました。'
         });
         continue;
       }
+      console.log('[Supabase][SELECT] Fetched after insert:', allTasks.length);
 
       // 返信＋爆撃プッシュ
       await lineClient.replyMessage(event.replyToken, {
         type: 'text',
-        text: 'タスクを追加しました！\n全タスクを送信します…'
+        text: 'タスクを追加しました！\n全タスクを送信中…'
       });
       for (const t of allTasks) {
         await lineClient.pushMessage(userId, {
@@ -145,13 +157,22 @@ app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
 
     // 進捗確認
     else if (text === '進捗確認') {
-      const { data, error } = await supabase
+      const { data, error: selErr } = await supabase
         .from('todos')
         .select('*')
         .eq('user_id', userId)
         .order('date', { ascending: true });
 
-      const replyText = (error || !data || data.length === 0)
+      if (selErr) {
+        console.error('[Supabase][SELECT] Error fetching todos:', selErr);
+        await lineClient.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '進捗取得に失敗しました。'
+        });
+        continue;
+      }
+
+      const replyText = data.length === 0
         ? '現在タスクは登録されていません。'
         : data.map(t => `✅ ${t.task}（${t.date || '未定'}） - ${t.status}`).join('\n');
 
@@ -160,24 +181,33 @@ app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
 
     // タスク表示
     else if (text === 'タスク表示') {
-      const { data, error } = await supabase
+      const { data, error: selErr } = await supabase
         .from('todos')
         .select('*')
         .eq('user_id', userId)
         .order('date', { ascending: true });
 
-      const replyText = (error || !data || data.length === 0)
+      if (selErr) {
+        console.error('[Supabase][SELECT] Error fetching todos:', selErr);
+        await lineClient.replyMessage(event.replyToken, {
+          type: 'text',
+          text: 'タスク取得に失敗しました。'
+        });
+        continue;
+      }
+
+      const replyText = data.length === 0
         ? '現在タスクは登録されていません。'
         : data.map(t => `   ${t.task}（${t.date || '未定'}） - ${t.status}`).join('\n');
 
       await lineClient.replyMessage(event.replyToken, { type: 'text', text: replyText });
     }
 
-    // その他
+    // それ以外
     else {
       await lineClient.replyMessage(event.replyToken, {
         type: 'text',
-        text: '「タスク追加 ○○」／「進捗確認」／「タスク表示」を送信してください。'
+        text: '「タスク追加 ○○」／「進捗確認」／「タスク表示」を送ってください。'
       });
     }
   }
@@ -185,41 +215,45 @@ app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
   res.sendStatus(200);
 });
 
-// ── Web からタスク追加 API ──
+// ── Web API：タスク追加／取得 ──
 app.post('/add-task', async (req, res) => {
   const { task, deadline, userId } = req.body;
-  if (!userId) {
-    return res.status(400).json({ error: 'userIdが必要です' });
-  }
+  if (!userId) return res.status(400).json({ error: 'userIdが必要です' });
 
   const [date, time] = (deadline || '').split(' ');
 
-  // 通知ON を保証
+  // UPsert user_settings
   await supabase.from('user_settings').upsert({
     user_id: userId,
     notify: true
   });
 
-  const { error } = await supabase.from('todos').insert({
-    user_id: userId,
-    task,
-    status: '未完了',
-    date: date || null,
-    time: time || null
-  });
-  if (error) {
-    console.error('Supabase登録失敗:', error.message);
+  // INSERT
+  const { data: insData, error: insErr } = await supabase
+    .from('todos')
+    .insert({
+      user_id: userId,
+      task,
+      status: '未完了',
+      date: date || null,
+      time: time || null
+    });
+
+  if (insErr) {
+    console.error('[Supabase][INSERT] /add-task error:', insErr);
     return res.status(500).json({ error: '登録失敗' });
   }
+  console.log('[Supabase][INSERT] /add-task inserted:', insData);
 
-  // プッシュ通知
+  // 既存設定チェック＆LINE通知
   try {
-    const { data: settings } = await supabase
+    const { data: settings, error: cfgErr } = await supabase
       .from('user_settings')
       .select('notify')
       .eq('user_id', userId)
       .single();
 
+    if (cfgErr) console.error('[Supabase][SELECT] /add-task settings error:', cfgErr);
     if (settings?.notify) {
       await lineClient.pushMessage(userId, {
         type: 'text',
@@ -227,29 +261,27 @@ app.post('/add-task', async (req, res) => {
       });
     }
   } catch (err) {
-    console.warn('LINE通知エラー:', err.message);
+    console.warn('[LINE] /add-task push error:', err.message);
   }
 
   res.json({ success: true, message: 'タスクを追加しました！' });
 });
 
-// ── Web からタスク取得 API ──
 app.get('/get-tasks', async (req, res) => {
   const userId = req.query.userId;
-  if (!userId) {
-    return res.status(400).json({ error: 'userIdが必要です' });
-  }
+  if (!userId) return res.status(400).json({ error: 'userIdが必要です' });
 
-  const { data, error } = await supabase
+  const { data, error: selErr } = await supabase
     .from('todos')
     .select('*')
     .eq('user_id', userId)
     .order('date', { ascending: true });
 
-  if (error) {
-    console.error('タスク取得エラー:', error.message);
+  if (selErr) {
+    console.error('[Supabase][SELECT] /get-tasks error:', selErr);
     return res.status(500).json({ error: '取得失敗' });
   }
+  console.log('[Supabase][SELECT] /get-tasks fetched:', data.length);
 
   res.json({ tasks: data });
 });
