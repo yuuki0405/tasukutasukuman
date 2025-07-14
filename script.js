@@ -122,4 +122,4 @@ if (Notification.permission !== 'granted') {
 }
 
 // 初期表示
-document.addEventListener('DOMContentLoaded', loadTasks)
+document.addEventListener('DO
