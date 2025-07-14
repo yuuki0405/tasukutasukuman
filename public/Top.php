@@ -1,3 +1,6 @@
+<?php
+session_start();
+?>
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -11,12 +14,13 @@
       <div class="header-logo">🧠 LINE爆撃くん</div>
       <nav class="nav-menu">
         <ul>
-          <li><a href="index.html">📝 新規会員登録/ログイン</a></li>
-          <li><a href="Top.html">🏠 ホーム</a></li>
-          <li><a href="goningumi.html">👥 グループ情報</a></li>
-          <li><a href="mypage.html">👤 マイページ（ユーザー情報）</a></li>
-          <li><a href="zinkaku.html">🔔 通知キャラ設定ガチャ</a></li>
-          <li><a href="index.html">ログアウト</a></li>
+          <li><a href="login.php">📝 新規会員登録/ログイン</a></li>
+          <li><a href="Top.php">🏠 ホーム</a></li>
+          <li><a href="goningumi.php">👥 グループ情報</a></li>
+          <li><a href="mypage.php">👤 マイページ（ユーザー情報）</a></li>
+          <li><a href="zinkaku.php">🔔 通知キャラ設定ガチャ</a></li>
+          <li><p><?php $_SESSION['email'] ?></p></li>
+          <li><a href="login.php">ログアウト</a></li>
         </ul>
       </nav>
     </header>
@@ -43,9 +47,11 @@
       </form>
 
       <!-- ✅ 修正済：LINEログインリンク -->
-      <a href="https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=2007710282&redirect_uri=https%3A%2F%2Ftray3forse-linebakugeki.netlify.app%2F.netlify%2Ffunctions%2Fcallback&state=random123&scope=openid%20profile&bot_prompt=aggressive">
-        <img src="https://scdn.line-apps.com/n/line_add_friends/btn/ja.png" alt="LINEでログイン">
-      </a>
+      <a href="https://line.me/R/ti/p/%40578xtcun" target="_blank">
+      <img src="https://scdn.line-apps.com/n/line_add_friends/btn/ja.png" alt="LINEで友だち追加">
+        </a>
+      
+     
 
 
       <p id="message" style="color:red;"></p>
