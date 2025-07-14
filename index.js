@@ -6,9 +6,7 @@ const { createClient } = require('@supabase/supabase-js');
 const line = require('@line/bot-sdk');
 const cron = require('node-cron');
 
-//
 // 環境変数読み込み
-//
 const {
   CHANNEL_ACCESS_TOKEN,
   CHANNEL_SECRET,
@@ -17,49 +15,37 @@ const {
   PORT = 3000
 } = process.env;
 
-//
-// LINE Client 設定
-//
+// LINE Client 初期化
 const lineConfig = {
   channelAccessToken: CHANNEL_ACCESS_TOKEN,
   channelSecret: CHANNEL_SECRET
 };
 const lineClient = new line.Client(lineConfig);
 
-//
-// Supabase Client 設定
-//
+// Supabase Client 初期化
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-//
 // Express アプリ初期化
-//
 const app = express();
 
-// LINE署名検証のため rawBody を取得
+// LINE 署名検証用の rawBody 取得
 app.use(bodyParser.json({
   verify: (req, res, buf) => {
     req.rawBody = buf.toString();
   }
 }));
 
-//
-// 定期爆撃通知：毎朝 9:00 に未完了タスクをユーザーごとに送信
-// 日本時間サーバーの場合は '0 0 0 * * *' など事前調整を
-//
+// ── 定期爆撃通知 (毎朝9:00) ──
 cron.schedule('0 9 * * *', async () => {
   try {
-    // 未完了タスクを全件取得
+    // 「未完了」タスクをすべて取得
     const { data: tasks, error } = await supabase
       .from('todos')
       .select('*')
       .eq('status', '未完了')
       .order('date', { ascending: true });
 
-    if (error || !tasks) {
-      console.error('定期通知：タスク取得失敗', error);
-      return;
-    }
+    if (error) throw error;
 
     // ユーザーごとにグルーピング
     const byUser = tasks.reduce((acc, t) => {
@@ -68,86 +54,96 @@ cron.schedule('0 9 * * *', async () => {
       return acc;
     }, {});
 
-    // 各ユーザーに順次プッシュ
+    // 各ユーザーへ通知
     for (const [userId, list] of Object.entries(byUser)) {
+      // 通知設定をチェック
+      const { data: settings } = await supabase
+        .from('user_settings')
+        .select('notify')
+        .eq('user_id', userId)
+        .single();
+
+      if (!settings?.notify) continue;
+
       for (const t of list) {
         await lineClient.pushMessage(userId, {
           type: 'text',
-          text: `🔔 Reminder\n${t.task}\n期限: ${t.date || '未定'}`
+          text: `🔔 今日のタスク\n${t.task}\n期限: ${t.date || '未定'} ${t.time || ''}`
         });
       }
     }
 
-    console.log('定期通知：完了');
+    console.log('定期通知: 成功');
   } catch (err) {
-    console.error('定期通知でエラー', err);
+    console.error('定期通知: エラー', err);
   }
 });
 
-//
-// LINE Webhook エンドポイント
-//
+// ── LINE Webhook ──
 app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
   const events = req.body.events || [];
 
   for (const event of events) {
-    if (event.type !== 'message' || event.message.type !== 'text') {
-      continue;
-    }
+    if (event.type !== 'message' || event.message.type !== 'text') continue;
 
     const userId = event.source.userId;
     const text = event.message.text.trim();
 
-    // ユーザー設定を upsert（通知ON）
+    // 通知ON を保証
     await supabase.from('user_settings').upsert({
       user_id: userId,
       notify: true
     });
 
-    // 「タスク追加 ○○」
+    // タスク追加
     if (text.startsWith('タスク追加 ')) {
       const taskContent = text.replace('タスク追加 ', '');
 
-      // タスク登録
-      await supabase.from('todos').insert({
+      // Supabase に登録
+      const { error: insertError } = await supabase.from('todos').insert({
         user_id: userId,
         task: taskContent,
         status: '未完了',
         date: null,
         time: null
       });
+      if (insertError) {
+        await lineClient.replyMessage(event.replyToken, {
+          type: 'text',
+          text: 'タスク登録に失敗しました😭'
+        });
+        continue;
+      }
 
-      // 全タスク取得 → 爆撃プッシュ
+      // 全タスク取得
       const { data: allTasks, error: fetchError } = await supabase
         .from('todos')
         .select('*')
         .eq('user_id', userId)
         .order('date', { ascending: true });
 
-      if (fetchError || !allTasks) {
+      if (fetchError) {
         await lineClient.replyMessage(event.replyToken, {
           type: 'text',
-          text: 'タスク取得に失敗しました…'
+          text: 'タスク一覧取得に失敗しました…'
         });
         continue;
       }
 
-      // まずは返信
+      // 返信＋爆撃プッシュ
       await lineClient.replyMessage(event.replyToken, {
         type: 'text',
-        text: 'タスクを追加しました！\nタスク一覧を送信中…'
+        text: 'タスクを追加しました！\n全タスクを送信します…'
       });
-
-      // プッシュ通知で一覧を連投
       for (const t of allTasks) {
         await lineClient.pushMessage(userId, {
           type: 'text',
-          text: `📌 ${t.task}（${t.date || '未定'}） - ${t.status}`
+          text: `📌 ${t.task}（${t.date || '未定'} ${t.time || ''}）`
         });
       }
     }
 
-    // 「進捗確認」
+    // 進捗確認
     else if (text === '進捗確認') {
       const { data, error } = await supabase
         .from('todos')
@@ -155,22 +151,14 @@ app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
         .eq('user_id', userId)
         .order('date', { ascending: true });
 
-      let replyText = '';
-      if (error || !data || data.length === 0) {
-        replyText = '現在タスクは登録されていません。';
-      } else {
-        replyText = data
-          .map(t => `✅ ${t.task}（${t.date || '未定'}） - ${t.status}`)
-          .join('\n');
-      }
+      const replyText = (error || !data || data.length === 0)
+        ? '現在タスクは登録されていません。'
+        : data.map(t => `✅ ${t.task}（${t.date || '未定'}） - ${t.status}`).join('\n');
 
-      await lineClient.replyMessage(event.replyToken, {
-        type: 'text',
-        text: replyText
-      });
+      await lineClient.replyMessage(event.replyToken, { type: 'text', text: replyText });
     }
 
-    // 「タスク表示」
+    // タスク表示
     else if (text === 'タスク表示') {
       const { data, error } = await supabase
         .from('todos')
@@ -178,26 +166,18 @@ app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
         .eq('user_id', userId)
         .order('date', { ascending: true });
 
-      let replyText = '';
-      if (error || !data || data.length === 0) {
-        replyText = '現在タスクは登録されていません。';
-      } else {
-        replyText = data
-          .map(t => `   ${t.task}（${t.date || '未定'}） - ${t.status}`)
-          .join('\n');
-      }
+      const replyText = (error || !data || data.length === 0)
+        ? '現在タスクは登録されていません。'
+        : data.map(t => `   ${t.task}（${t.date || '未定'}） - ${t.status}`).join('\n');
 
-      await lineClient.replyMessage(event.replyToken, {
-        type: 'text',
-        text: replyText
-      });
+      await lineClient.replyMessage(event.replyToken, { type: 'text', text: replyText });
     }
 
-    // デフォルト案内
+    // その他
     else {
       await lineClient.replyMessage(event.replyToken, {
         type: 'text',
-        text: '「タスク追加 ○○」・「進捗確認」・「タスク表示」を送信してください。'
+        text: '「タスク追加 ○○」／「進捗確認」／「タスク表示」を送信してください。'
       });
     }
   }
@@ -205,9 +185,7 @@ app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
   res.sendStatus(200);
 });
 
-//
-// Web からタスク追加 API
-//
+// ── Web からタスク追加 API ──
 app.post('/add-task', async (req, res) => {
   const { task, deadline, userId } = req.body;
   if (!userId) {
@@ -216,13 +194,12 @@ app.post('/add-task', async (req, res) => {
 
   const [date, time] = (deadline || '').split(' ');
 
-  // user_settings を upsert
+  // 通知ON を保証
   await supabase.from('user_settings').upsert({
     user_id: userId,
     notify: true
   });
 
-  // todos登録
   const { error } = await supabase.from('todos').insert({
     user_id: userId,
     task,
@@ -230,13 +207,12 @@ app.post('/add-task', async (req, res) => {
     date: date || null,
     time: time || null
   });
-
   if (error) {
     console.error('Supabase登録失敗:', error.message);
     return res.status(500).json({ error: '登録失敗' });
   }
 
-  // 通知ONなら LINE push
+  // プッシュ通知
   try {
     const { data: settings } = await supabase
       .from('user_settings')
@@ -257,9 +233,7 @@ app.post('/add-task', async (req, res) => {
   res.json({ success: true, message: 'タスクを追加しました！' });
 });
 
-//
-// Web からタスク取得 API
-//
+// ── Web からタスク取得 API ──
 app.get('/get-tasks', async (req, res) => {
   const userId = req.query.userId;
   if (!userId) {
@@ -280,9 +254,7 @@ app.get('/get-tasks', async (req, res) => {
   res.json({ tasks: data });
 });
 
-//
 // サーバー起動
-//
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
