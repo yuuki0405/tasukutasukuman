@@ -26,6 +26,17 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
 
+    // 👊 「やってない」って送ったら即爆撃返信
+    if (text === 'やってない') {
+      const messages = Array.from({ length: 3 }, (_, i) => ({
+        type: 'text',
+        text: `💣 爆撃${i + 1}: やってない！？即対応！🔥`
+      }));
+      await client.replyMessage(event.replyToken, { messages });
+      continue;
+    }
+
+    // 📝 タスク追加
     if (text.startsWith('タスク追加 ')) {
       const taskContent = text.replace('タスク追加 ', '');
 
@@ -37,29 +48,15 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         time: null
       });
 
-      await client.replyMessage(event.replyToken, { type: 'text', text: 'タスクを追加しました！' });
-
-      const { data: settings } = await supabase.from('user_settings').select('notify').eq('user_id', userId).single();
-
-      if (settings?.notify) {
-        await client.pushMessage(userId, {
-          type: 'text',
-          text: `🆕 タスク: ${taskContent}\n締切: 未定`
-        });
-
-        if (taskContent.includes('やってない')) {
-          const messages = Array.from({ length: 100 }, (_, i) => ({
-            type: 'text',
-            text: `💣 爆撃${i + 1}: やってないなんて言わせない！`
-          }));
-          for (const msg of messages) {
-            await client.pushMessage(userId, msg);
-          }
-        }
-      }
+      await client.replyMessage(event.replyToken, {
+        type: 'text',
+        text: 'タスクを追加しました！'
+      });
+      continue;
     }
 
-    else if (text === '進捗確認') {
+    // 🔍 進捗確認
+    if (text === '進捗確認') {
       const { data } = await supabase.from('todos').select('*').eq('user_id', userId).order('date', { ascending: true });
 
       const replyText = data?.length
@@ -67,14 +64,14 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         : '現在タスクは登録されていません。';
 
       await client.replyMessage(event.replyToken, { type: 'text', text: replyText });
+      continue;
     }
 
-    else {
-      await client.replyMessage(event.replyToken, {
-        type: 'text',
-        text: '「タスク追加 ○○」または「進捗確認」と送ってください。'
-      });
-    }
+    // ❓ その他
+    await client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: '「タスク追加 ○○」「進捗確認」または「やってない」と送ってください。'
+    });
   }
 
   res.sendStatus(200);
@@ -106,16 +103,6 @@ app.post('/add-task', async (req, res) => {
       type: 'text',
       text: `🆕 タスク: ${task}\n締切: ${deadline || '未定'}`
     });
-
-    if (task.includes('やってない')) {
-      const messages = Array.from({ length: 100 }, (_, i) => ({
-        type: 'text',
-        text: `💣 爆撃${i + 1}: やってないなんて言わせない！`
-      }));
-      for (const msg of messages) {
-        await client.pushMessage(userId, msg);
-      }
-    }
   }
 
   res.json({ success: true, message: 'タスクを追加しました！' });
