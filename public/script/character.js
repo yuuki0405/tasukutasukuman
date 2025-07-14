@@ -66,5 +66,3 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('selectedText').textContent = `${saved} を以前に選択済み`;
   }
 });
-
-
