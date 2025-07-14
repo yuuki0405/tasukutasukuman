@@ -26,12 +26,18 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
 
-    // 👊 「やってない」って送ったら即爆撃返信
+    // 👊 「やってない」 → 爆撃スタンプ返信
     if (text === 'やってない') {
-      const messages = Array.from({ length: 10 }, (_, i) => ({
-        type: 'text',
-        text: `💣 爆撃${i + 1}: やってない！？即対応！🔥`
-      }));
+      const messages = [
+        { type: 'text', text: '💣 やってない！？即対応！🔥' },
+        { type: 'text', text: '💢 遅れてるぞ！今だ！' },
+        {
+          type: 'sticker',
+          packageId: '446',
+          stickerId: '1988'
+        }
+      ];
+
       await client.replyMessage(event.replyToken, { messages });
       continue;
     }
@@ -57,7 +63,11 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     // 🔍 進捗確認
     if (text === '進捗確認') {
-      const { data } = await supabase.from('todos').select('*').eq('user_id', userId).order('date', { ascending: true });
+      const { data } = await supabase
+        .from('todos')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date', { ascending: true });
 
       const replyText = data?.length
         ? data.map(t => `✅ ${t.task}（${t.date || '未定'} ${t.time || ''}） - ${t.status}`).join('\n')
@@ -96,7 +106,11 @@ app.post('/add-task', async (req, res) => {
 
   if (error) return res.status(500).json({ error: '登録失敗' });
 
-  const { data: settings } = await supabase.from('user_settings').select('notify').eq('user_id', userId).single();
+  const { data: settings } = await supabase
+    .from('user_settings')
+    .select('notify')
+    .eq('user_id', userId)
+    .single();
 
   if (settings?.notify) {
     await client.pushMessage(userId, {
@@ -113,7 +127,11 @@ app.get('/get-tasks', async (req, res) => {
   const userId = req.query.userId;
   if (!userId) return res.status(400).json({ error: 'userIdが必要です' });
 
-  const { data, error } = await supabase.from('todos').select('*').eq('user_id', userId).order('date', { ascending: true });
+  const { data, error } = await supabase
+    .from('todos')
+    .select('*')
+    .eq('user_id', userId)
+    .order('date', { ascending: true });
 
   if (error) return res.status(500).json({ error: '取得失敗' });
   res.json({ tasks: data });
