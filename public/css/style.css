@@ -1,0 +1,205 @@
+body {
+  margin: 0 !important;
+  padding: 0 !important;
+   font-family: Arial, sans-serif;
+  background-image: url('../BackGround.jpg');
+  background-size: cover;
+  background-repeat: no-repeat;
+  overflow-x: auto; 
+}
+
+/* ヘッダー */
+.header {
+    background-color: #2bdf08;
+    top: 0;
+    min-height: 90px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    margin: 0;
+    padding: 0;
+    left: 0;
+    box-sizing: border-box;
+    border-radius: 0;     /* 角丸をなくす（必要なら） */
+}
+.header-logo {
+    font-size: 20px;
+    font-weight: bold;
+    color: #007bff;
+    margin-left: 16px;   /* 左端に寄せる */
+}
+
+.header nav ul {
+    list-style: none;
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    margin: 0;
+    padding: 0;
+}
+
+.header nav a {
+    color: white;
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 16px;
+    white-space: nowrap;
+    padding: 0 8px;
+}
+
+.header nav a:hover {
+    text-decoration: underline;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 7px) {
+    .header {
+        position: fixed;   
+        flex-direction: column;
+        align-items: stretch;
+        min-height: 170px;
+        height: auto;
+        background-color: #2bdf08;
+        width: 100vw;
+        min-width: 100vw;
+      
+    }
+    .header-logo {
+        width: 100%;
+        text-align: center;
+        margin: 0;
+        padding: 8px 0 0 0;
+    }
+    .header nav {
+        width: 100%;
+    }
+    .header nav ul {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 10px;
+        justify-content: center;
+        width: 100%;
+    }
+}
+
+.container {
+  max-width: 800px;
+  margin: 50px auto 100px auto;
+  background: white;
+  padding: 2em;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+/* フォーム */
+#taskForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 2em;
+  align-items: center;
+}
+
+#taskForm label {
+  flex: 1 1 30%;
+  display: flex;
+  flex-direction: column;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+#taskForm input {
+  padding: 0.75em;
+  border: 2px solid #ccc;
+  border-radius: 10px;
+  font-size: 1rem;
+  outline: none;
+  transition: 0.3s;
+  margin-top: 0.25em;
+}
+
+#taskForm input:focus {
+  border-color: #3f51b5;
+  box-shadow: 0 0 0 3px rgba(63, 81, 181, 0.2);
+}
+
+#taskForm button[type="submit"] {
+  flex: 1 1 100px;
+  padding: 0.75em 1.5em;
+  background: #3f51b5;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: 0.3s;
+  margin-top: 22px; /* ラベルの高さに合わせる */
+}
+
+#taskForm button[type="submit"]:hover {
+  background: #303f9f;
+}
+
+/* メッセージ */
+#message {
+  margin-bottom: 1em;
+  font-weight: bold;
+}
+
+/* タスク一覧 */
+.task {
+  background: #f1f1f1;
+  border-radius: 12px;
+  margin-bottom: 1em;
+  padding: 1em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.task-content {
+  max-width: 70%;
+  font-size: 1rem;
+}
+
+.task-content strong {
+  display: block;
+  font-size: 1.1rem;
+  margin-bottom: 0.25em;
+}
+
+.task-content small {
+  color: #555;
+}
+
+/* 削除ボタン */
+.task button {
+  background: #e53935;
+  border: none;
+  color: white;
+  padding: 0.5em 1em;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: 0.3s;
+}
+
+.task button:hover {
+  background: #c62828;
+}
+
+/* スマホ対応 */
+@media (max-width: 600px) {
+  .task-content {
+    max-width: 100%;
+  }
+
+  #taskForm label, 
+  #taskForm button[type="submit"] {
+    flex: 1 1 100%;
+  }
+}
