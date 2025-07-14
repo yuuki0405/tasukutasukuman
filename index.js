@@ -28,7 +28,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     // 👊 「やってない」って送ったら即爆撃返信
     if (text === 'やってない') {
-      const messages = Array.from({ length: 100 }, (_, i) => ({
+      const messages = Array.from({ length: 10 }, (_, i) => ({
         type: 'text',
         text: `💣 爆撃${i + 1}: やってない！？即対応！🔥`
       }));
