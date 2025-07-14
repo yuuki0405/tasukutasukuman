@@ -14,8 +14,12 @@ app.use(bodyParser.json({ verify: (req, res, buf) => { req.rawBody = buf.toStrin
 app.use(express.json());
 app.use(express.static('public'));
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
+// 📬 LINEメッセージ受付
 app.post('/webhook', line.middleware(config), async (req, res) => {
   for (const event of req.body.events || []) {
     if (event.type !== 'message' || event.message.type !== 'text') continue;
@@ -25,20 +29,20 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
 
-    // 👊「やってない」で返信爆撃（最大5件）
+    // 💣 「やってない」→ テキスト＆スタンプ爆撃返信
     if (text === 'やってない') {
       const messages = [
-        { type: 'text', text: '💣 やってない！？即対応！🔥' },
-        { type: 'text', text: '💢 遅れてるぞ！今だ！' },
+        { type: 'text', text: '💣 爆撃1: やってない！？今すぐ着手！' },
+        { type: 'text', text: '📛 爆撃2: 本気見せる時！' },
         { type: 'sticker', packageId: '446', stickerId: '1988' },
-        { type: 'text', text: '📛 本気出す時間だ！' },
+        { type: 'text', text: '🔥 爆撃3: もう言い訳はナシ！' },
         { type: 'sticker', packageId: '446', stickerId: '2003' }
       ];
       await client.replyMessage(event.replyToken, { messages });
       continue;
     }
 
-    // 📝「タスク追加 ○○」で登録
+    // 📝 「タスク追加 ○○」→ Supabase登録
     if (text.startsWith('タスク追加 ')) {
       const taskContent = text.replace('タスク追加 ', '');
 
@@ -57,7 +61,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 🔍「進捗確認」で一覧
+    // 🔎 「進捗確認」→ タスク一覧返信
     if (text === '進捗確認') {
       const { data } = await supabase
         .from('todos')
@@ -73,7 +77,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // ❓ その他のメッセージへの応答
+    // ❓ その他 → ヘルプ表示
     await client.replyMessage(event.replyToken, {
       type: 'text',
       text: '「タスク追加 ○○」「進捗確認」「やってない」と送ってください！'
@@ -83,7 +87,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   res.sendStatus(200);
 });
 
-// 🌐 Webからのタスク追加
+// 🌐 Webフォームからのタスク追加
 app.post('/add-task', async (req, res) => {
   const { task, deadline, userId } = req.body;
   if (!userId) return res.status(400).json({ error: 'userIdが必要です' });
