@@ -1,3 +1,5 @@
+require('dotenv').config(); // ローカル実行用（Render環境では不要）
+
 const express = require('express');
 const line = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
@@ -19,9 +21,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// 📬 LINEメッセージ受付
+// 📬 LINE メッセージ受付
 app.post('/webhook', line.middleware(config), async (req, res) => {
-  for (const event of req.body.events || []) {
+  if (!req.body.events) return res.status(403).send('Forbidden');
+
+  for (const event of req.body.events) {
     if (event.type !== 'message' || event.message.type !== 'text') continue;
 
     const userId = event.source.userId;
@@ -29,7 +33,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
 
-    // 💣 「やってない」→ テキスト＆スタンプ爆撃返信
+    // 💣「やってない」 → 爆撃返信（最大5件）
     if (text === 'やってない') {
       const messages = [
         { type: 'text', text: '💣 爆撃1: やってない！？今すぐ着手！' },
@@ -42,9 +46,16 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 📝 「タスク追加 ○○」→ Supabase登録
+    // 📝「タスク追加 ○○」→ Supabase 登録
     if (text.startsWith('タスク追加 ')) {
       const taskContent = text.replace('タスク追加 ', '');
+      if (!taskContent || taskContent.length > 200) {
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '有効なタスク内容を入力してください（200文字以内）。'
+        });
+        continue;
+      }
 
       await supabase.from('todos').insert({
         user_id: userId,
@@ -61,7 +72,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 🔎 「進捗確認」→ タスク一覧返信
+    // 🔎「進捗確認」→ タスク一覧取得
     if (text === '進捗確認') {
       const { data } = await supabase
         .from('todos')
@@ -90,7 +101,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 // 🌐 Webフォームからのタスク追加
 app.post('/add-task', async (req, res) => {
   const { task, deadline, userId } = req.body;
-  if (!userId) return res.status(400).json({ error: 'userIdが必要です' });
+  if (!userId || !task) return res.status(400).json({ error: 'userIdとtaskが必要です' });
 
   const [date, time] = deadline?.split('T') || [null, null];
 
@@ -139,5 +150,5 @@ app.get('/get-tasks', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Server ready at http://localhost:${PORT}`);
 });
