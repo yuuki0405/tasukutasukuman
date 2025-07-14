@@ -16,9 +16,8 @@ app.use(express.static('public'));
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-// 🔔 LINE Webhook
 app.post('/webhook', line.middleware(config), async (req, res) => {
-  for (const event of req.body.events) {
+  for (const event of req.body.events || []) {
     if (event.type !== 'message' || event.message.type !== 'text') continue;
 
     const userId = event.source.userId;
@@ -26,23 +25,20 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
 
-    // 👊 「やってない」 → 爆撃スタンプ返信
+    // 👊「やってない」で返信爆撃（最大5件）
     if (text === 'やってない') {
       const messages = [
         { type: 'text', text: '💣 やってない！？即対応！🔥' },
         { type: 'text', text: '💢 遅れてるぞ！今だ！' },
-        {
-          type: 'sticker',
-          packageId: '446',
-          stickerId: '1988'
-        }
+        { type: 'sticker', packageId: '446', stickerId: '1988' },
+        { type: 'text', text: '📛 本気出す時間だ！' },
+        { type: 'sticker', packageId: '446', stickerId: '2003' }
       ];
-
       await client.replyMessage(event.replyToken, { messages });
       continue;
     }
 
-    // 📝 タスク追加
+    // 📝「タスク追加 ○○」で登録
     if (text.startsWith('タスク追加 ')) {
       const taskContent = text.replace('タスク追加 ', '');
 
@@ -61,7 +57,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 🔍 進捗確認
+    // 🔍「進捗確認」で一覧
     if (text === '進捗確認') {
       const { data } = await supabase
         .from('todos')
@@ -77,17 +73,17 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // ❓ その他
+    // ❓ その他のメッセージへの応答
     await client.replyMessage(event.replyToken, {
       type: 'text',
-      text: '「タスク追加 ○○」「進捗確認」または「やってない」と送ってください。'
+      text: '「タスク追加 ○○」「進捗確認」「やってない」と送ってください！'
     });
   }
 
   res.sendStatus(200);
 });
 
-// 🌐 Webからタスク追加
+// 🌐 Webからのタスク追加
 app.post('/add-task', async (req, res) => {
   const { task, deadline, userId } = req.body;
   if (!userId) return res.status(400).json({ error: 'userIdが必要です' });
@@ -122,7 +118,7 @@ app.post('/add-task', async (req, res) => {
   res.json({ success: true, message: 'タスクを追加しました！' });
 });
 
-// 🌐 Webからタスク取得
+// 🌐 Webからのタスク取得
 app.get('/get-tasks', async (req, res) => {
   const userId = req.query.userId;
   if (!userId) return res.status(400).json({ error: 'userIdが必要です' });
