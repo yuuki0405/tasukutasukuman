@@ -1,0 +1,476 @@
+body {
+  margin: 0 !important;
+  padding: 0 !important;
+   font-family: Arial, sans-serif;
+  background-image: url('../BackGround.jpg');
+  background-size: cover;
+  background-repeat: no-repeat;
+  overflow-x: auto; 
+}
+
+/* ヘッダー */
+.header {
+    background-color: #2bdf08;
+    top: 0;
+    min-height: 90px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    margin: 0;
+    padding: 0;
+    left: 0;
+    box-sizing: border-box;
+    border-radius: 0;     /* 角丸をなくす（必要なら） */
+}
+.header-logo {
+    font-size: 20px;
+    font-weight: bold;
+    color: #007bff;
+    margin-left: 16px;   /* 左端に寄せる */
+}
+
+.header nav ul {
+    list-style: none;
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    margin: 0;
+    padding: 0;
+}
+
+.header nav a {
+    color: white;
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 16px;
+    white-space: nowrap;
+    padding: 0 8px;
+}
+
+.header nav a:hover {
+    text-decoration: underline;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 7px) {
+    .header {
+        position: fixed;   
+        flex-direction: column;
+        align-items: stretch;
+        min-height: 170px;
+        height: auto;
+        background-color: #2bdf08;
+        width: 100vw;
+        min-width: 100vw;
+      
+    }
+    .header-logo {
+        width: 100%;
+        text-align: center;
+        margin: 0;
+        padding: 8px 0 0 0;
+    }
+    .header nav {
+        width: 100%;
+    }
+    .header nav ul {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 10px;
+        justify-content: center;
+        width: 100%;
+    }
+}
+
+
+.container {
+.container {
+  padding-top: 100px; /* ヘッダーの高さ分だけ余白を確保 */
+  max-width: 900px;
+  margin: auto;
+  text-align: center;
+}
+}
+
+.character-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1em;
+  justify-content: center;
+}
+
+.character-card {
+  padding: 10px;
+  margin: 10px;
+  border: 2px solid gray;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: 0.3s;
+  width: 180px;
+  text-align: center;
+  background: white;
+}
+
+.character-card:hover {
+  background-color: #ffe4e1;
+}
+
+.character-card.selected {
+  border-color: #ff69b4;
+  background-color: #fff0f5;
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.save-btn {
+  display: block;
+  margin: 2em auto;
+  padding: 0.75em 2em;
+  font-size: 1rem;
+  background: #3f51b5;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#selectedText {
+  text-align: center;
+  margin-top: 1.5em;
+  font-weight: bold;
+}
+
+
+
+/* レスポンシブデザイン */
+@media (max-width: 768px) {
+    .header {
+        height: auto;
+        flex-direction: column;
+        padding: 10px;
+    }
+
+    .header nav ul {
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .container {
+        padding-top: 50px;
+    }
+
+    .character-card {
+        width: calc(50% - 20px);
+        margin: 5px;
+    }
+
+    .save-btn {
+        width: 90%;
+        margin: 1em auto;
+    }
+}
+
+@media (max-width: 480px) {
+    .character-card {
+        width: 100%;
+    }
+}
+/*ガチャ要素*/
+.gacha-title {
+  text-align: center;
+  font-size: 2em;
+  margin-top: 30px;
+  color: #FF00FF;
+}
+
+.gacha-container {
+    background-image: url('../1750314709105.jpg');
+  padding: 30px;
+  border-radius: 30px;
+  
+
+  /* ✅ スマホ・タブレット・PCすべてに対応 */
+  width: 90%;              /* スマホなど狭い画面に合わせて縮む */
+  max-width: 600px;        /* PCで広がりすぎないように制限 */
+  margin: 40px auto;       /* 上下の余白 & 中央寄せ */
+
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.white-box {
+  background: #FFD700; /* ほぼ白・少し透過もOK */
+  animation: fadeIn 0.5s ease-in-out;
+  border-radius: 24px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    padding: 60px 40px;
+  width: 500px;
+  max-width: none;
+  text-align: center;
+}
+
+.gacha-btn {
+  background: linear-gradient(to right, gold, orange);
+  color: white;
+  font-size: 1.5em;
+  padding: 14px 32px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+   margin-top: 20px;
+   
+}
+
+.gacha-btn:hover {
+  transform: scale(1.07);
+}
+
+.gacha-result {
+  margin-top: 20px;
+  padding: 20px;
+  background: #fff6cc;
+  border: 3px dashed #ffcc00;
+  border-radius: 12px;
+  text-align: center;
+  width: 80%;
+  max-width: 340px;
+  font-size: 1.3em;
+  animation: fadeIn 0.5s ease-in-out;
+}
+.gacha-result-container {
+  display: flex;
+  justify-content: center;   /* 横方向中央揃え */
+  align-items: center;       /* 縦方向中央揃え（必要なら） */
+  margin-top: 20px;
+}
+/* 全体のガチャ枠 */
+.gacha-box {
+  width: 280px;
+  margin: 0 auto;
+  padding: 15px;
+  border: 3px solid #aaa;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  text-align: center;
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+/* ヘッダーラベル（レア度） */
+.gacha-header {
+  background: #eee;
+  padding: 8px;
+  font-weight: bold;
+  border-bottom: 2px solid #ccc;
+  border-radius: 8px 8px 0 0;
+  font-size: 1.1em;
+}
+
+/* カプセルの位置調整 */
+.gacha-capsule-area {
+  margin: 20px 0;
+}
+
+/* キャラ名表示 */
+.gacha-name {
+  font-size: 1.3em;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+
+.selected-text {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 1.1em;
+  color: #333;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.gacha-card {
+    background: #e9f5e9;
+  background: linear-gradient(145deg, #ffffff, #f0f0f0);
+  border: 3px solid #ccc;
+  border-radius: 16px;
+  padding: 20px;
+  width: 300px;
+  margin: 20px auto;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  text-align: center;
+  animation: fadeIn 0.4s ease-in-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.gacha-card::before {
+  content: attr(data-rarity-label);
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: #ffcc00;
+  color: #000;
+  padding: 5px 10px;
+  font-weight: bold;
+  font-size: 0.9em;
+  border-bottom-right-radius: 10px;
+}
+
+.char-name {
+  font-size: 1.6em;
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+.char-stars {
+  font-size: 1.3em;
+  margin-bottom: 5px;
+}
+
+/* レアリティ別カラーリング */
+.rarity-1 {
+  border-color: #26c6da;
+  background: linear-gradient(to bottom right, #e0f7fa, #b2ebf2);
+}
+
+.rarity-2 {
+  border-color: #ffa726;
+  background: linear-gradient(to bottom right, #ffe0b2, #ffcc80);
+}
+
+.rarity-3 {
+  border-color: #ab47bc;
+  background: linear-gradient(to bottom right, #f3e5f5, #ce93d8);
+}
+/*アニメーション*/
+/* 落下＋回転アニメーション */
+@keyframes capsuleDropSpin {
+  0% {
+    transform: translateY(-150px) scale(0.5) rotate(0deg);
+    opacity: 0;
+  }
+  70% {
+    transform: translateY(10px) scale(1.1) rotate(300deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1) rotate(360deg);
+  }
+}
+
+.capsule {
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle at center, #fff, #ccc);
+  border-radius: 50%;
+  margin: 0 auto;
+  animation: capsuleDropSpin 1s ease-out;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  position: relative;
+  z-index: 1;
+}
+
+/* 光る演出：レアリティ別 */
+.rarity-1 {
+  box-shadow: 0 0 8px 2px #26c6da;
+}
+
+.rarity-2 {
+  box-shadow: 0 0 12px 4px #ffa726;
+}
+
+.rarity-3 {
+  box-shadow: 0 0 20px 6px #e040fb, 0 0 30px 8px #ab47bc inset;
+  background: radial-gradient(circle, #fff6f9, #ce93d8);
+}
+
+.capsule-text {
+  text-align: center;
+  font-weight: bold;
+  font-size: 1.2em;
+  margin-top: 10px;
+}
+.ssr-effect {
+  animation: ssrGlow 1.2s ease-in-out infinite alternate;
+  background: linear-gradient(to bottom right, #ffe6ff, #f3e5f5);
+  border: 3px solid #d500f9;
+  box-shadow: 0 0 15px 5px rgba(255, 0, 255, 0.6),
+              0 0 25px 10px rgba(255, 105, 180, 0.3) inset;
+}
+
+@keyframes ssrGlow {
+  0% {
+    box-shadow: 0 0 10px 3px rgba(255, 0, 255, 0.4),
+                0 0 15px 5px rgba(255, 105, 180, 0.2) inset;
+  }
+  100% {
+    box-shadow: 0 0 20px 8px rgba(255, 0, 255, 0.6),
+                0 0 30px 12px rgba(255, 105, 180, 0.4) inset;
+  }
+}
+.gacha-header {
+  padding: 8px;
+  font-weight: bold;
+  border-bottom: 2px solid #ccc;
+  border-radius: 8px 8px 0 0;
+  font-size: 1.1em;
+  color: white;
+}
+
+/* 各レアリティの背景色 */
+.rarity-label-r {
+  background-color: #29b6f6; /* 青 */
+}
+
+.rarity-label-sr {
+  background-color: #ffa726; /* オレンジ */
+}
+
+.rarity-label-ssr {
+  background: linear-gradient(to right, #ec407a, #ab47bc); /* ピンク紫 */
+  box-shadow: 0 0 10px rgba(255, 105, 180, 0.7);
+}
+.gacha-center-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;   /* 横中央揃え */
+  justify-content: center; /* 縦中央揃え（必要なら） */
+  width: 100%;
+  margin: 0 auto;
+}
+
+.gacha-btn {
+  margin-bottom: 24px; /* ボタン下に余白 */
+}
+
+.gacha-result-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.task-progress {
+  margin-top: 24px; /* タスク達成度の上に余白 */
+  text-align: center;
+  width: 100%;
+}
+.white-box.fullscreen {
+  background: #FFD700; /* ほぼ白・少し透過もOK */
+  margin-top: 40px; 
+  animation: fadeIn 0.5s ease-in-out;
+  border-radius: 24px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+   padding: 60px 40px;
+  width: 500px;
+  max-width: none;
+  text-align: center;
+}

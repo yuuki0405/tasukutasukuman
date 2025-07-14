@@ -1,0 +1,191 @@
+body {
+  margin: 0 !important;
+  padding: 0 !important;
+   font-family: Arial, sans-serif;
+  background-image: url('../BackGround.jpg');
+  background-size: cover;
+  background-repeat: no-repeat;
+  overflow-x: auto; 
+}
+
+/* ヘッダー */
+.header {
+    background-color: #2bdf08;
+    top: 0;
+    min-height: 90px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    margin: 0;
+    padding: 0;
+    left: 0;
+    box-sizing: border-box;
+    border-radius: 0;     /* 角丸をなくす（必要なら） */
+}
+.header-logo {
+    font-size: 20px;
+    font-weight: bold;
+    color: #007bff;
+    margin-left: 16px;   /* 左端に寄せる */
+}
+
+.header nav ul {
+    list-style: none;
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    margin: 0;
+    padding: 0;
+}
+
+.header nav a {
+    color: white;
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 16px;
+    white-space: nowrap;
+    padding: 0 8px;
+}
+
+.header nav a:hover {
+    text-decoration: underline;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 7px) {
+    .header {
+        position: fixed;   
+        flex-direction: column;
+        align-items: stretch;
+        min-height: 170px;
+        height: auto;
+        background-color: #2bdf08;
+        width: 100vw;
+        min-width: 100vw;
+      
+    }
+    .header-logo {
+        width: 100%;
+        text-align: center;
+        margin: 0;
+        padding: 8px 0 0 0;
+    }
+    .header nav {
+        width: 100%;
+    }
+    .header nav ul {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 10px;
+        justify-content: center;
+        width: 100%;
+    }
+}
+
+
+/* コンテンツ */
+.container {
+  max-width: 700px;
+  margin: 2rem auto;
+  padding: 1rem;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
+}
+
+/* セクション共通 */
+section {
+  margin-bottom: 2rem;
+}
+
+input[type="text"] {
+  width: 70%;
+  padding: 0.6rem;
+  margin-top: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+button {
+  padding: 0.6rem 1.2rem;
+  margin-left: 0.5rem;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+button:hover {
+  background-color: #3e8e41;
+}
+
+.status-msg {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  color: #007bff;
+}
+
+ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+}
+
+.hidden {
+  display: none;
+}
+
+.rules-section ul {
+  background-color: #f1f3f5;
+  padding: 1rem;
+  border-radius: 8px;
+}
+.rules-section label {
+  display: block;
+  margin: 0.5rem 0;
+  font-size: 0.95rem;
+}
+
+#selectedRulesList {
+  background-color: #f0f8ff;
+  padding: 0.8rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+}
+.delete-rule-btn {
+  background-color: transparent;
+  border: none;
+  color: red;
+  cursor: pointer;
+  font-size: 16px;
+}
+/* メンバーリストのスタイル */
+.member-section ul li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #e9f5e9;
+  margin: 0.4rem 0;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+}
+
+/* メンバーリストの削除ボタン */
+.member-section ul li button {
+  background-color: transparent;
+  border: none;
+  color: red;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.member-section ul li button:hover {
+  color: darkred;
+}
+
+
