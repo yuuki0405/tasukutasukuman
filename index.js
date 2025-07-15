@@ -31,7 +31,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
 
-    // 💣 爆撃系：「やってない」
+    // 💣 やってない → 爆撃返信
     if (text.includes('やってない')) {
       await client.replyMessage(event.replyToken, [
         { type: 'text', text: '💣 爆撃1: やってない！？即対応！' },
@@ -41,26 +41,29 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 📝 タスク登録（「追加」「登録」「タスク」含む）
+    // 📝 タスク登録（キーワード一致）
     if (/追加|登録|タスク/.test(text)) {
       const taskContent = text.replace(/^.*(追加|登録|タスク)\s*/, '').trim();
 
       if (!taskContent || taskContent.length > 200) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: '⚠️ タスク内容を200文字以内で入力してください。'
+          text: '⚠️ タスク内容は200文字以内で入力してください。'
         });
         continue;
       }
 
       try {
-        const { data, error } = await supabase.from('todos').insert({
-          user_id: userId,
-          task: taskContent,
-          status: '未完了',
-          date: null,
-          time: null
-        });
+        const { data, error } = await supabase
+          .from('todos')
+          .insert({
+            user_id: userId,
+            task: taskContent,
+            status: '未完了',
+            date: null,
+            time: null
+          })
+          .select(); // ← データ取得を明示
 
         if (error) {
           await client.replyMessage(event.replyToken, {
@@ -82,7 +85,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 🔍 進捗確認
+    // 🔍 進捗確認（部分一致対応）
     if (text.includes('進捧') || text.includes('進捗')) {
       const { data, error } = await supabase
         .from('todos')
@@ -124,10 +127,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // ℹ️ その他
+    // ℹ️ その他案内
     await client.replyMessage(event.replyToken, {
       type: 'text',
-      text: '📌 「追加 ○○」「タスク登録 ○○」「進捗確認」「やってない」と送ってください！'
+      text: '📌 「追加 ○○」「登録 ○○」「タスク ○○」「進捗確認」「やってない」と送ってください！'
     });
   }
 
