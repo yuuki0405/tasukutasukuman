@@ -1,4 +1,25 @@
-// 上部の require や Express / Supabase 設定はそのままでOK
+require('dotenv').config();
+
+const express = require('express');
+const line = require('@line/bot-sdk');
+const { createClient } = require('@supabase/supabase-js');
+const bodyParser = require('body-parser');
+
+const config = {
+  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.CHANNEL_SECRET
+};
+const client = new line.Client(config);
+const app = express();
+
+app.use(bodyParser.json({ verify: (req, res, buf) => { req.rawBody = buf.toString(); } }));
+app.use(express.json());
+app.use(express.static('public'));
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 // 📬 LINEメッセージ受付
 app.post('/webhook', line.middleware(config), async (req, res) => {
@@ -10,7 +31,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
 
-    // 💣 やってない爆撃
     if (text.includes('やってない')) {
       await client.replyMessage(event.replyToken, [
         { type: 'text', text: '💣 爆撃1: やってない！？即対応！' },
@@ -20,7 +40,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 🧨 めんどくさい爆撃
     if (text.includes('めんどくさい') || text.includes('面倒') || text.includes('だるい')) {
       await client.replyMessage(event.replyToken, [
         { type: 'text', text: '💥 爆撃モード起動！サボりは許されない！' },
@@ -30,16 +49,14 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 👁️ 放置状況トリガ応答
-    if (text.includes('放置') || text.includes('状況') || text.includes('時間経過')) {
+    if (/放置|状況|時間経過/.test(text)) {
       await client.replyMessage(event.replyToken, {
         type: 'text',
-        text: '💢 放置されてるタスクがあるかもよ？1週間以上サボったらBotが怒るぞ😤'
+        text: '📣 Botは見てるぞ…放置されたタスクには爆撃が飛ぶ！7日以上サボったら爆破対象だ💣'
       });
       continue;
     }
 
-    // ✅ タスク完了（削除）
     if (/完了/.test(text)) {
       const taskToDelete = text.replace(/^.*完了\s*/, '').trim();
       if (!taskToDelete) {
@@ -67,11 +84,9 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           text: `✅ タスク「${taskToDelete}」を削除したぞ…でも調子に乗るなよ😏`
         });
       }
-
       continue;
     }
 
-    // 📝 タスク追加
     if (/追加|登録|タスク/.test(text)) {
       const taskContent = text.replace(/^.*(追加|登録|タスク)\s*/, '').trim();
       if (!taskContent || taskContent.length > 200) {
@@ -112,11 +127,9 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           text: `⚠️ 登録処理中にエラー発生しました：${err.message}`
         });
       }
-
       continue;
     }
 
-    // 🔍 進捗確認
     if (text.includes('進捧') || text.includes('進捗')) {
       const { data, error } = await supabase
         .from('todos')
@@ -158,17 +171,16 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // ℹ️ その他案内
     await client.replyMessage(event.replyToken, {
       type: 'text',
-      text: '📌 「追加 ○○」「登録 ○○」「完了 ○○」「進捗確認」「やってない」「めんどくさい」「放置 状況」などで使ってください！'
+      text: '📌 「追加 ○○」「完了 ○○」「進捗確認」「やってない」「めんどくさい」「状況」などで使ってください！'
     });
   }
 
   res.sendStatus(200);
 });
 
-// 🌐 Webフォームからのタスク追加（変更なし）
+// 🌐 タスク追加API（Webフォーム用）
 app.post('/add-task', async (req, res) => {
   const { task, deadline, userId } = req.body;
   if (!userId || !task) return res.status(400).json({ error: 'userIdとtaskが必要です' });
@@ -203,7 +215,5 @@ app.post('/add-task', async (req, res) => {
   res.json({ success: true, message: 'タスクを追加しました！' });
 });
 
-// ⏰ タスク放置チェック（毎日実行）
-const ONE_DAY = 1000 * 60 * 60 * 24;
-setInterval(async () => {
-  console.log('[爆撃Bot]
+// ⏰ 怠惰チェック（毎日1回）
+const ONE_DAY = 100
