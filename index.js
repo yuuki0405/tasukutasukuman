@@ -1,4 +1,4 @@
-require('dotenv').config(); // ローカル実行用（Render環境では不要）
+require('dotenv').config();
 
 const express = require('express');
 const line = require('@line/bot-sdk');
@@ -23,9 +23,7 @@ const supabase = createClient(
 
 // 📬 LINE メッセージ受付
 app.post('/webhook', line.middleware(config), async (req, res) => {
-  if (!req.body.events) return res.status(403).send('Forbidden');
-
-  for (const event of req.body.events) {
+  for (const event of req.body.events || []) {
     if (event.type !== 'message' || event.message.type !== 'text') continue;
 
     const userId = event.source.userId;
@@ -33,26 +31,24 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
 
-    // 💣「やってない」 → 爆撃返信（最大5件）
-    if (text === 'やってない') {
+    // 💣「やってない」を部分一致で検知（例："今日はやってない…" でもOK）
+    if (text.includes('やってない')) {
       const messages = [
-        { type: 'text', text: '💣 爆撃1: やってない！？今すぐ着手！' },
-        { type: 'text', text: '📛 爆撃2: 本気見せる時！' },
-        { type: 'sticker', packageId: '446', stickerId: '1988' },
-        { type: 'text', text: '🔥 爆撃3: もう言い訳はナシ！' },
-        { type: 'sticker', packageId: '446', stickerId: '2003' }
+        { type: 'text', text: '💣 爆撃1: やってない！？即対応！' },
+        { type: 'text', text: '📛 爆撃2: 本気出すタイミングだ！' },
+        { type: 'sticker', packageId: '446', stickerId: '1988' }
       ];
-      await client.replyMessage(event.replyToken, { messages });
+      await client.replyMessage(event.replyToken, messages);
       continue;
     }
 
-    // 📝「タスク追加 ○○」→ Supabase 登録
+    // 📝 タスク追加コマンド
     if (text.startsWith('タスク追加 ')) {
       const taskContent = text.replace('タスク追加 ', '');
       if (!taskContent || taskContent.length > 200) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: '有効なタスク内容を入力してください（200文字以内）。'
+          text: 'タスク内容は200文字以内で入力してください。'
         });
         continue;
       }
@@ -72,33 +68,59 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 🔎「進捗確認」→ タスク一覧取得
-    if (text === '進捗確認') {
-      const { data } = await supabase
+    // 🔍 タスク一覧表示（進捗確認）
+    if (text.includes('進捧') || text.includes('進捗確認')) {
+      const { data, error } = await supabase
         .from('todos')
         .select('*')
         .eq('user_id', userId)
         .order('date', { ascending: true });
 
-      const replyText = data?.length
-        ? data.map(t => `✅ ${t.task}（${t.date || '未定'} ${t.time || ''}） - ${t.status}`).join('\n')
-        : '現在タスクは登録されていません。';
+      if (error || !data || data.length === 0) {
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '📭 現在タスクは登録されていません。'
+        });
+        continue;
+      }
 
-      await client.replyMessage(event.replyToken, { type: 'text', text: replyText });
+      const MAX_LENGTH = 500;
+      const lines = data.map(t => {
+        const date = t.date || '未定';
+        const time = t.time || '';
+        const status = t.status || '未完了';
+        return `🔹 ${t.task}（${date} ${time}） - ${status}`;
+      });
+
+      const chunks = [];
+      let chunk = '';
+
+      for (const line of lines) {
+        if ((chunk + '\n' + line).length > MAX_LENGTH) {
+          chunks.push(chunk);
+          chunk = line;
+        } else {
+          chunk += chunk ? '\n' + line : line;
+        }
+      }
+      if (chunk) chunks.push(chunk);
+
+      const messages = chunks.map(c => ({ type: 'text', text: c }));
+      await client.replyMessage(event.replyToken, messages);
       continue;
     }
 
-    // ❓ その他 → ヘルプ表示
+    // ❓ その他：案内返信
     await client.replyMessage(event.replyToken, {
       type: 'text',
-      text: '「タスク追加 ○○」「進捗確認」「やってない」と送ってください！'
+      text: '📌「タスク追加 ○○」「進捗確認」「やってない」と送ってください！'
     });
   }
 
   res.sendStatus(200);
 });
 
-// 🌐 Webフォームからのタスク追加
+// ✅ Webフォームからタスク追加（そのまま維持）
 app.post('/add-task', async (req, res) => {
   const { task, deadline, userId } = req.body;
   if (!userId || !task) return res.status(400).json({ error: 'userIdとtaskが必要です' });
@@ -133,22 +155,7 @@ app.post('/add-task', async (req, res) => {
   res.json({ success: true, message: 'タスクを追加しました！' });
 });
 
-// 🌐 Webからのタスク取得
-app.get('/get-tasks', async (req, res) => {
-  const userId = req.query.userId;
-  if (!userId) return res.status(400).json({ error: 'userIdが必要です' });
-
-  const { data, error } = await supabase
-    .from('todos')
-    .select('*')
-    .eq('user_id', userId)
-    .order('date', { ascending: true });
-
-  if (error) return res.status(500).json({ error: '取得失敗' });
-  res.json({ tasks: data });
-});
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server ready at http://localhost:${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
