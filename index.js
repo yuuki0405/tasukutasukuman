@@ -31,7 +31,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
 
-    // 💣 やってない → 爆撃返信
+    // 💣 「やってない」 → 爆撃返信
     if (text.includes('やってない')) {
       await client.replyMessage(event.replyToken, [
         { type: 'text', text: '💣 爆撃1: やってない！？即対応！' },
@@ -41,7 +41,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 📝 タスク登録（キーワード一致）
+    // 📝 タスク追加（部分一致で「追加」「登録」「タスク」）
     if (/追加|登録|タスク/.test(text)) {
       const taskContent = text.replace(/^.*(追加|登録|タスク)\s*/, '').trim();
 
@@ -63,7 +63,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
             date: null,
             time: null
           })
-          .select(); // ← データ取得を明示
+          .select(); // ← これが肝！
 
         if (error) {
           await client.replyMessage(event.replyToken, {
@@ -71,21 +71,23 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
             text: `🚫 登録失敗: ${error.message}`
           });
         } else {
+          const id = data?.[0]?.id || '不明';
           await client.replyMessage(event.replyToken, {
             type: 'text',
-            text: `🆕 タスク「${taskContent}」を登録しました！（ID: ${data[0]?.id || '不明'}）`
+            text: `🆕 タスク「${taskContent}」を登録しました！（ID: ${id}）`
           });
         }
       } catch (err) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: `⚠️ 登録処理中にエラー発生: ${err.message}`
+          text: `⚠️ 登録処理中にエラー発生しました：${err.message}`
         });
       }
+
       continue;
     }
 
-    // 🔍 進捗確認（部分一致対応）
+    // 🔍 進捗確認（部分一致）
     if (text.includes('進捧') || text.includes('進捗')) {
       const { data, error } = await supabase
         .from('todos')
