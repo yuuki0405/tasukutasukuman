@@ -222,7 +222,8 @@ app.post('/add-task', async (req, res) => {
   res.json({ success: true, message: 'タスクを追加しました！' });
 });
 
-// ✅ Express起動確認（これがないとRenderで即終了する）
+// ✅ Expressサーバー起動（これがないとRenderで即終了する！）
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running
+  console.log(`🚀 Server running on port ${PORT}`);
+});
