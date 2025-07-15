@@ -31,6 +31,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
 
+    // 💣 怠惰爆撃トリガー
     if (text.includes('やってない')) {
       await client.replyMessage(event.replyToken, [
         { type: 'text', text: '💣 爆撃1: やってない！？即対応！' },
@@ -49,6 +50,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
+    // 👁️ 放置状況トリガー応答
     if (/放置|状況|時間経過/.test(text)) {
       await client.replyMessage(event.replyToken, {
         type: 'text',
@@ -57,8 +59,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
+    // ✅ タスク完了（削除）
     if (/完了/.test(text)) {
       const taskToDelete = text.replace(/^.*完了\s*/, '').trim();
+
       if (!taskToDelete) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
@@ -84,11 +88,14 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           text: `✅ タスク「${taskToDelete}」を削除したぞ…でも調子に乗るなよ😏`
         });
       }
+
       continue;
     }
 
+    // 📝 タスク追加
     if (/追加|登録|タスク/.test(text)) {
       const taskContent = text.replace(/^.*(追加|登録|タスク)\s*/, '').trim();
+
       if (!taskContent || taskContent.length > 200) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
@@ -127,9 +134,11 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           text: `⚠️ 登録処理中にエラー発生しました：${err.message}`
         });
       }
+
       continue;
     }
 
+    // 🔍 進捗確認
     if (text.includes('進捧') || text.includes('進捗')) {
       const { data, error } = await supabase
         .from('todos')
@@ -171,16 +180,17 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
+    // ℹ️ その他案内
     await client.replyMessage(event.replyToken, {
       type: 'text',
-      text: '📌 「追加 ○○」「完了 ○○」「進捗確認」「やってない」「めんどくさい」「状況」などで使ってください！'
+      text: '📌 「追加 ○○」「完了 ○○」「進捗確認」「やってない」「めんどくさい」「放置状況」などで使ってね！'
     });
   }
 
   res.sendStatus(200);
 });
 
-// 🌐 タスク追加API（Webフォーム用）
+// 🌐 Webフォームからのタスク追加
 app.post('/add-task', async (req, res) => {
   const { task, deadline, userId } = req.body;
   if (!userId || !task) return res.status(400).json({ error: 'userIdとtaskが必要です' });
@@ -207,13 +217,3 @@ app.post('/add-task', async (req, res) => {
 
   if (settings?.notify) {
     await client.pushMessage(userId, {
-      type: 'text',
-      text: `🆕 タスク: ${task}\n締切: ${deadline || '未定'}`
-    });
-  }
-
-  res.json({ success: true, message: 'タスクを追加しました！' });
-});
-
-// ⏰ 怠惰チェック（毎日1回）
-const ONE_DAY = 100
