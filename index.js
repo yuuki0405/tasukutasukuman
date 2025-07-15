@@ -31,7 +31,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
 
-    // 💣 「やってない」 → 爆撃返信
+    // 💣 爆撃：「やってない」
     if (text.includes('やってない')) {
       await client.replyMessage(event.replyToken, [
         { type: 'text', text: '💣 爆撃1: やってない！？即対応！' },
@@ -41,7 +41,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 🧹 完了 → タスク削除対応
+    // ✅ タスク完了 → 削除処理
     if (/完了/.test(text)) {
       const taskToDelete = text.replace(/^.*完了\s*/, '').trim();
 
@@ -53,7 +53,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('todos')
         .delete()
         .eq('user_id', userId)
@@ -64,15 +64,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           type: 'text',
           text: `🚫 削除失敗: ${error.message}`
         });
-      } else if (!data || data.length === 0) {
-        await client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: `🕵️‍♂️ タスク「${taskToDelete}」が見つかりませんでした。`
-        });
       } else {
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: `✅ タスク「${taskToDelete}」を削除完了！…達成したからって調子乗るなよ😎`
+          text: `✅ タスク「${taskToDelete}」を削除したぞ…でも調子に乗るなよ😏`
         });
       }
 
@@ -167,7 +162,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // ℹ️ その他
+    // ℹ️ その他案内
     await client.replyMessage(event.replyToken, {
       type: 'text',
       text: '📌 「追加 ○○」「登録 ○○」「完了 ○○」「進捗確認」「やってない」と送ってください！'
