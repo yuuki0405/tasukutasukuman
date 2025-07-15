@@ -41,7 +41,45 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 📝 タスク追加（部分一致で「追加」「登録」「タスク」）
+    // 🧹 完了 → タスク削除対応
+    if (/完了/.test(text)) {
+      const taskToDelete = text.replace(/^.*完了\s*/, '').trim();
+
+      if (!taskToDelete) {
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '⚠️ 完了するタスク名を入力してください！（例: 完了 筋トレ）'
+        });
+        continue;
+      }
+
+      const { data, error } = await supabase
+        .from('todos')
+        .delete()
+        .eq('user_id', userId)
+        .eq('task', taskToDelete);
+
+      if (error) {
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: `🚫 削除失敗: ${error.message}`
+        });
+      } else if (!data || data.length === 0) {
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: `🕵️‍♂️ タスク「${taskToDelete}」が見つかりませんでした。`
+        });
+      } else {
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: `✅ タスク「${taskToDelete}」を削除完了！…達成したからって調子乗るなよ😎`
+        });
+      }
+
+      continue;
+    }
+
+    // 📝 タスク追加
     if (/追加|登録|タスク/.test(text)) {
       const taskContent = text.replace(/^.*(追加|登録|タスク)\s*/, '').trim();
 
@@ -63,7 +101,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
             date: null,
             time: null
           })
-          .select(); // ← これが肝！
+          .select();
 
         if (error) {
           await client.replyMessage(event.replyToken, {
@@ -87,7 +125,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 🔍 進捗確認（部分一致）
+    // 🔍 進捗確認
     if (text.includes('進捧') || text.includes('進捗')) {
       const { data, error } = await supabase
         .from('todos')
@@ -129,10 +167,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // ℹ️ その他案内
+    // ℹ️ その他
     await client.replyMessage(event.replyToken, {
       type: 'text',
-      text: '📌 「追加 ○○」「登録 ○○」「タスク ○○」「進捗確認」「やってない」と送ってください！'
+      text: '📌 「追加 ○○」「登録 ○○」「完了 ○○」「進捗確認」「やってない」と送ってください！'
     });
   }
 
