@@ -31,7 +31,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
 
-    // 💣 怠惰爆撃トリガー
+    // 💣 爆撃：やってない
     if (text.includes('やってない')) {
       await client.replyMessage(event.replyToken, [
         { type: 'text', text: '💣 爆撃1: やってない！？即対応！' },
@@ -41,6 +41,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
+    // 💥 爆撃：怠惰系
     if (text.includes('めんどくさい') || text.includes('面倒') || text.includes('だるい')) {
       await client.replyMessage(event.replyToken, [
         { type: 'text', text: '💥 爆撃モード起動！サボりは許されない！' },
@@ -50,7 +51,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 👁️ 放置状況トリガー応答
+    // 👁️ 爆撃：放置状況トリガー
     if (/放置|状況|時間経過/.test(text)) {
       await client.replyMessage(event.replyToken, {
         type: 'text',
@@ -62,7 +63,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     // ✅ タスク完了（削除）
     if (/完了/.test(text)) {
       const taskToDelete = text.replace(/^.*完了\s*/, '').trim();
-
       if (!taskToDelete) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
@@ -88,14 +88,12 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           text: `✅ タスク「${taskToDelete}」を削除したぞ…でも調子に乗るなよ😏`
         });
       }
-
       continue;
     }
 
     // 📝 タスク追加
     if (/追加|登録|タスク/.test(text)) {
       const taskContent = text.replace(/^.*(追加|登録|タスク)\s*/, '').trim();
-
       if (!taskContent || taskContent.length > 200) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
@@ -134,12 +132,11 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           text: `⚠️ 登録処理中にエラー発生しました：${err.message}`
         });
       }
-
       continue;
     }
 
     // 🔍 進捗確認
-    if (text.includes('進捧') || text.includes('進捗')) {
+    if (text.includes('進捗') || text.includes('進捧')) {
       const { data, error } = await supabase
         .from('todos')
         .select('*')
@@ -183,7 +180,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     // ℹ️ その他案内
     await client.replyMessage(event.replyToken, {
       type: 'text',
-      text: '📌 「追加 ○○」「完了 ○○」「進捗確認」「やってない」「めんどくさい」「放置状況」などで使ってね！'
+      text: '📌 「追加 ○○」「完了 ○○」「進捗確認」「やってない」「めんどくさい」「状況確認」などで使ってね！'
     });
   }
 
@@ -217,3 +214,15 @@ app.post('/add-task', async (req, res) => {
 
   if (settings?.notify) {
     await client.pushMessage(userId, {
+      type: 'text',
+      text: `🆕 タスク: ${task}\n締切: ${deadline || '未定'}`
+    });
+  }
+
+  res.json({ success: true, message: 'タスクを追加しました！' });
+});
+
+// ✅ Express起動確認（これがないとRenderで即終了する）
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running
