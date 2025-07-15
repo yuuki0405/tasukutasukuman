@@ -5,37 +5,29 @@ const line = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const bodyParser = require('body-parser');
 
-// 環境変数設定
+// LINE／Supabase 共通設定
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.CHANNEL_SECRET,
-  // タイムアウト追加
   timeout: 10000
 };
 const client = new line.Client(config);
 const app = express();
 
-// 未処理例外／Promise拒否をキャッチしてログ
-process.on('uncaughtException', (err) => {
-  console.error('[uncaughtException]', err);
-});
-process.on('unhandledRejection', (reason) => {
-  console.error('[unhandledRejection]', reason);
-});
+// 未処理例外・Promise拒否をログ
+process.on('uncaughtException', err => console.error('[uncaughtException]', err));
+process.on('unhandledRejection', reason => console.error('[unhandledRejection]', reason));
 
-app.use(bodyParser.json({
-  verify: (req, res, buf) => { req.rawBody = buf.toString(); }
-}));
+app.use(bodyParser.json({ verify: (req, res, buf) => { req.rawBody = buf.toString(); } }));
 app.use(express.json());
 app.use(express.static('public'));
 
-// Supabaseクライアント
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// LINE Webhook受信
+// 📬 LINE Webhook
 app.post('/webhook', line.middleware(config), async (req, res) => {
   for (const event of req.body.events || []) {
     if (event.type !== 'message' || event.message.type !== 'text') continue;
@@ -43,13 +35,30 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     const userId = event.source.userId;
     const text = event.message.text.trim();
 
-    // ユーザー設定 upsert
+    // 通知設定を upsert
     try {
-      await supabase
-        .from('user_settings')
-        .upsert({ user_id: userId, notify: true });
+      await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
     } catch (err) {
       console.error('UserSettings upsert failed:', err);
+    }
+
+    // 🔧 詳細設定リンク
+    if (text.includes('詳細設定')) {
+      try {
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: [
+            '🔗 詳細設定はこちらからどうぞ：',
+            'https://tasukutasukuman.onrender.com/',
+            '',
+            '現在まだ開発途中の機能も含まれておりますので、',
+            '不具合等がございましたらご容赦いただけますと幸いです。'
+          ].join('\n')
+        });
+      } catch (err) {
+        console.error('ReplyMessage failed:', err);
+      }
+      continue;
     }
 
     // 🔗 人格設定リンク
@@ -86,7 +95,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     }
 
     // 💥 怠惰系爆撃
-    if (['めんどくさい','面倒','だるい'].some(w => text.includes(w))) {
+    if (['めんどくさい', '面倒', 'だるい'].some(w => text.includes(w))) {
       try {
         await client.replyMessage(event.replyToken, [
           { type: 'text', text: '💥 爆撃モード起動！サボりは許されない！' },
@@ -198,7 +207,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         }
         const MAX = 500;
         const lines = data.map(t =>
-          `🔹 ${t.task}（${t.date||'未定'} ${t.time||''}） - ${t.status||'未完了'}`
+          `🔹 ${t.task}（${t.date || '未定'} ${t.time || ''}） - ${t.status || '未完了'}`
         );
         const chunks = [];
         let acc = '';
@@ -228,13 +237,14 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     await client.replyMessage(event.replyToken, {
       type: 'text',
       text: [
-        '📌 「追加 ○○」「完了 ○○」「進捗確認」「やってない」「めんどくさい」「人格設定」などで使ってね！',
+        '📌 「追加 ○○」「完了 ○○」「進捗確認」「やってない」「めんどくさい」「人格設定」「詳細設定」などで使ってね！',
         '',
         '現在まだ開発途中の機能も含まれておりますので、',
         '不具合等がございましたらご容赦いただけますと幸いです。'
       ].join('\n')
     });
   }
+
   res.sendStatus(200);
 });
 
