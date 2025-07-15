@@ -12,7 +12,9 @@ const config = {
 const client = new line.Client(config);
 const app = express();
 
-app.use(bodyParser.json({ verify: (req, res, buf) => { req.rawBody = buf.toString(); } }));
+app.use(bodyParser.json({
+  verify: (req, res, buf) => { req.rawBody = buf.toString(); }
+}));
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -29,9 +31,21 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     const userId = event.source.userId;
     const text = event.message.text.trim();
 
-    await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
+    // 常にユーザー設定テーブルに upsert（通知許可フラグ永続化）
+    await supabase
+      .from('user_settings')
+      .upsert({ user_id: userId, notify: true });
 
-    // 💣 爆撃：やってない
+    // 🔗 「人格設定」のキーワードでリンク誘導
+    if (text.includes('人格設定')) {
+      await client.replyMessage(event.replyToken, {
+        type: 'text',
+        text: '🔗 人格設定はこちらからどうぞ：\nhttps://tray3forse-linebakugeki.onrender.com/'
+      });
+      continue;
+    }
+
+    // 💣 「やってない」爆撃
     if (text.includes('やってない')) {
       await client.replyMessage(event.replyToken, [
         { type: 'text', text: '💣 爆撃1: やってない！？即対応！' },
@@ -41,8 +55,12 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 💥 爆撃：怠惰系
-    if (text.includes('めんどくさい') || text.includes('面倒') || text.includes('だるい')) {
+    // 💥 怠惰系爆撃：「めんどくさい」「面倒」「だるい」
+    if (
+      text.includes('めんどくさい') ||
+      text.includes('面倒') ||
+      text.includes('だるい')
+    ) {
       await client.replyMessage(event.replyToken, [
         { type: 'text', text: '💥 爆撃モード起動！サボりは許されない！' },
         { type: 'text', text: '🔥 めんどくさい？俺の方が10倍めんどくさいBotだぞ？' },
@@ -51,7 +69,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 👁️ 爆撃：放置状況トリガー
+    // 👁️ 放置状況トリガー：「放置」「状況」「時間経過」
     if (/放置|状況|時間経過/.test(text)) {
       await client.replyMessage(event.replyToken, {
         type: 'text',
@@ -60,7 +78,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // ✅ タスク完了（削除）
+    // ✅ タスク完了 → 削除処理
     if (/完了/.test(text)) {
       const taskToDelete = text.replace(/^.*完了\s*/, '').trim();
       if (!taskToDelete) {
@@ -91,7 +109,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 📝 タスク追加
+    // 📝 タスク追加：「追加」「登録」「タスク」
     if (/追加|登録|タスク/.test(text)) {
       const taskContent = text.replace(/^.*(追加|登録|タスク)\s*/, '').trim();
       if (!taskContent || taskContent.length > 200) {
@@ -120,7 +138,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
             text: `🚫 登録失敗: ${error.message}`
           });
         } else {
-          const id = data?.[0]?.id || '不明';
+          const id = data?.[0]?.id ?? '不明';
           await client.replyMessage(event.replyToken, {
             type: 'text',
             text: `🆕 タスク「${taskContent}」を登録しました！（ID: ${id}）`
@@ -135,7 +153,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 🔍 進捗確認
+    // 🔍 進捗確認：「進捗」「進捧」
     if (text.includes('進捗') || text.includes('進捧')) {
       const { data, error } = await supabase
         .from('todos')
@@ -161,7 +179,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
       const chunks = [];
       let chunk = '';
-
       for (const line of lines) {
         if ((chunk + '\n' + line).length > MAX_LENGTH) {
           chunks.push(chunk);
@@ -180,31 +197,32 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     // ℹ️ その他案内
     await client.replyMessage(event.replyToken, {
       type: 'text',
-      text: '📌 「追加 ○○」「完了 ○○」「進捗確認」「やってない」「めんどくさい」「状況確認」などで使ってね！'
+      text: '📌 「追加 ○○」「完了 ○○」「進捗確認」「やってない」「めんどくさい」「人格設定」などで使ってね！'
     });
   }
-
   res.sendStatus(200);
 });
 
 // 🌐 Webフォームからのタスク追加
 app.post('/add-task', async (req, res) => {
   const { task, deadline, userId } = req.body;
-  if (!userId || !task) return res.status(400).json({ error: 'userIdとtaskが必要です' });
+  if (!userId || !task) {
+    return res.status(400).json({ error: 'userIdとtaskが必要です' });
+  }
 
   const [date, time] = deadline?.split('T') || [null, null];
 
-  await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
+  await supabase
+    .from('user_settings')
+    .upsert({ user_id: userId, notify: true });
 
-  const { error } = await supabase.from('todos').insert({
-    user_id: userId,
-    task,
-    status: '未完了',
-    date,
-    time
-  });
+  const { error } = await supabase
+    .from('todos')
+    .insert({ user_id, task, status: '未完了', date, time });
 
-  if (error) return res.status(500).json({ error: '登録失敗' });
+  if (error) {
+    return res.status(500).json({ error: '登録失敗' });
+  }
 
   const { data: settings } = await supabase
     .from('user_settings')
@@ -222,7 +240,7 @@ app.post('/add-task', async (req, res) => {
   res.json({ success: true, message: 'タスクを追加しました！' });
 });
 
-// ✅ Expressサーバー起動（これがないとRenderで即終了する！）
+// ✅ Expressサーバー起動（必須）
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
