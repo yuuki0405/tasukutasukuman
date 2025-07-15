@@ -31,7 +31,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
 
-    // 💣 やってない → 爆撃返信
+    // 💣 爆撃系：「やってない」
     if (text.includes('やってない')) {
       await client.replyMessage(event.replyToken, [
         { type: 'text', text: '💣 爆撃1: やってない！？即対応！' },
@@ -41,20 +41,20 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // 📝 タスク登録（部分一致検知）
+    // 📝 タスク登録（「追加」「登録」「タスク」含む）
     if (/追加|登録|タスク/.test(text)) {
       const taskContent = text.replace(/^.*(追加|登録|タスク)\s*/, '').trim();
 
       if (!taskContent || taskContent.length > 200) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: '⚠️ タスク内容は200文字以内で入力してください。'
+          text: '⚠️ タスク内容を200文字以内で入力してください。'
         });
         continue;
       }
 
       try {
-        const { error } = await supabase.from('todos').insert({
+        const { data, error } = await supabase.from('todos').insert({
           user_id: userId,
           task: taskContent,
           status: '未完了',
@@ -70,20 +70,19 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         } else {
           await client.replyMessage(event.replyToken, {
             type: 'text',
-            text: `🆕 タスク「${taskContent}」を登録しました！`
+            text: `🆕 タスク「${taskContent}」を登録しました！（ID: ${data[0]?.id || '不明'}）`
           });
         }
       } catch (err) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: `🚫 登録中に予期せぬエラーが発生しました：${err.message}`
+          text: `⚠️ 登録処理中にエラー発生: ${err.message}`
         });
       }
-
       continue;
     }
 
-    // 🔍 進捗確認（部分一致対応）
+    // 🔍 進捗確認
     if (text.includes('進捧') || text.includes('進捗')) {
       const { data, error } = await supabase
         .from('todos')
@@ -125,10 +124,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
-    // ℹ️ その他 → 利用案内
+    // ℹ️ その他
     await client.replyMessage(event.replyToken, {
       type: 'text',
-      text: '📌 「追加 ○○」「登録 ○○」「タスク ○○」「進捗確認」「やってない」と送ってください！'
+      text: '📌 「追加 ○○」「タスク登録 ○○」「進捗確認」「やってない」と送ってください！'
     });
   }
 
