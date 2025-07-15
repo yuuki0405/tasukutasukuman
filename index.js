@@ -41,6 +41,16 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       continue;
     }
 
+    // 🧨 爆撃：「めんどくさい」「面倒」「だるい」
+    if (text.includes('めんどくさい') || text.includes('面倒') || text.includes('だるい')) {
+      await client.replyMessage(event.replyToken, [
+        { type: 'text', text: '💥 爆撃モード起動！サボりは許されない！' },
+        { type: 'text', text: '🔥 めんどくさい？俺の方が10倍めんどくさいBotだぞ？' },
+        { type: 'sticker', packageId: '11537', stickerId: '52002736' }
+      ]);
+      continue;
+    }
+
     // ✅ タスク完了 → 削除処理
     if (/完了/.test(text)) {
       const taskToDelete = text.replace(/^.*完了\s*/, '').trim();
@@ -165,7 +175,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     // ℹ️ その他案内
     await client.replyMessage(event.replyToken, {
       type: 'text',
-      text: '📌 「追加 ○○」「登録 ○○」「完了 ○○」「進捗確認」「やってない」と送ってください！'
+      text: '📌 「追加 ○○」「登録 ○○」「完了 ○○」「進捗確認」「やってない」「めんどくさい」などで使ってください！'
     });
   }
 
