@@ -6,6 +6,9 @@
     "start": "node index.js",
     "dev": "nodemon index.js"
   },
+  "engines": {
+    "node": ">=18 <21"
+  },
   "dependencies": {
     "@line/bot-sdk": "^7.5.1",
     "@supabase/supabase-js": "^2.39.7",
