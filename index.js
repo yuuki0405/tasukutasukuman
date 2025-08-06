@@ -1,4 +1,4 @@
-require('dotenv').config();
+  require('dotenv').config();
 
 const express = require('express');
 const line = require('@line/bot-sdk');
@@ -7,14 +7,15 @@ const bodyParser = require('body-parser');
 const path = require('path');
 
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-// 公開フォルダ（HTMLやCSS）を表示
+// Render用：静的ファイルとルート表示対応
 app.use(express.static('public'));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// LINE設定
+// LINE Bot設定
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.CHANNEL_SECRET,
@@ -28,7 +29,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// エラーログ対応
+// グローバル例外処理
 process.on('uncaughtException', err => console.error('[uncaughtException]', err));
 process.on('unhandledRejection', reason => console.error('[unhandledRejection]', reason));
 
@@ -39,7 +40,7 @@ app.use(bodyParser.json({
 }));
 app.use(express.json());
 
-// LINE Webhook受信
+// 📬 LINE Webhook本体
 app.post('/webhook', line.middleware(config), async (req, res) => {
   for (const event of req.body.events || []) {
     if (event.type !== 'message' || event.message.type !== 'text') continue;
@@ -50,7 +51,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     try {
       await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
 
-      // 詳細設定リンク
+      // 🔗 詳細設定
       if (/詳細設定/.test(text)) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
@@ -59,7 +60,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // 人格設定リンク
+      // 🔗 人格設定
       if (/人格設定/.test(text)) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
@@ -68,7 +69,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // 「やってない」対応
+      // 💣 やってない爆撃
       if (/やってない/.test(text)) {
         await client.replyMessage(event.replyToken, [
           { type: 'text', text: '💣 やってない！？即対応しろ！' },
@@ -78,7 +79,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // 怠惰系爆撃
+      // 💥 怠惰系爆撃
       if (/めんどくさい|面倒|だるい/.test(text)) {
         await client.replyMessage(event.replyToken, [
           { type: 'text', text: '💥 サボりは許さない！爆撃モード発動！' },
@@ -88,16 +89,16 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // 放置状況トリガー
+      // 👁️ 放置トリガー
       if (/放置|状況|時間経過/.test(text)) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: '📣 放置タスクには爆撃が飛ぶぞ！7日以上は要注意💣'
+          text: '📣 放置されたタスクには爆撃が飛ぶぞ！7日以上は危険領域だ💣'
         });
         continue;
       }
 
-      // タスク完了（削除）
+      // ✅ タスク完了
       if (/^完了\s*/.test(text)) {
         const taskName = text.replace(/^完了\s*/, '').trim();
         if (!taskName) {
@@ -122,7 +123,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // タスク追加
+      // 📝 タスク追加
       if (/^(追加|登録)\s+/.test(text)) {
         const content = text.replace(/^(追加|登録)\s*/, '').trim();
         if (!content) {
@@ -153,7 +154,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // 進捗確認
+      // 🔍 進捗確認
       if (text === '進捗確認') {
         const { data, error } = await supabase
           .from('todos')
@@ -173,23 +174,24 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         const MAX = 500;
         const lines = data.map(t => `🔹 ${t.task}（${t.date || '未定'}） - ${t.status}`);
         const chunks = [];
-        let chunk = '';
+        let buffer = '';
+
         for (const lineText of lines) {
-          if ((chunk + '\n' + lineText).length > MAX) {
-            chunks.push(chunk);
-            chunk = lineText;
+          if ((buffer + '\n' + lineText).length > MAX) {
+            chunks.push(buffer);
+            buffer = lineText;
           } else {
-            chunk += chunk ? '\n' + lineText : lineText;
+            buffer += buffer ? '\n' + lineText : lineText;
           }
         }
-        if (chunk) chunks.push(chunk);
+        if (buffer) chunks.push(buffer);
 
         const msgs = chunks.map(c => ({ type: 'text', text: c }));
         await client.replyMessage(event.replyToken, msgs);
         continue;
       }
 
-      // その他案内
+      // ℹ️ その他案内
       await client.replyMessage(event.replyToken, {
         type: 'text',
         text: [
@@ -200,7 +202,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           '・詳細設定／人格設定',
           '・やってない／めんどくさい',
           '',
-          '開発途中の機能を含みます。不具合ご了承願います。'
+          '開発中の機能が含まれます。不具合ご了承願います。'
         ].join('\n')
       });
     } catch (err) {
@@ -211,10 +213,8 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   res.sendStatus(200);
 });
 
-// サーバー起動
-const PORT = process.env.PORT || 3000;
+// ✅ サーバー起動
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`[DEBUG] Supabase URL: ${process.env.SUPABASE_URL}`);
-  console.log(`[DEBUG] Render Port: ${PORT}`);
+  console.log(`[DEBUG] Supabase URL: ${process.env.SUPABASE_URL || '未設定'}`);
 });
