@@ -26,18 +26,15 @@
   <!-- メインコンテンツ -->
   <div class="wrapper">
     <div class="gacha-container">
-      <!-- タイトル -->
       <div class="white-box">
         <h1 class="gacha-title">🎰 通知キャラクター・ガチャ</h1>
       </div>
 
-      <!-- ガチャボタンと結果表示 -->
       <div class="gacha-center-wrapper">
         <button class="gacha-btn" onclick="drawGacha()">ガチャを引く</button>
         <div id="gachaResult" class="gacha-result"></div>
       </div>
 
-      <!-- タスク達成と保存 -->
       <div class="white-box fullscreen">
         <div class="task-progress">
           <p>タスク達成ポイント：<span id="taskCount">0</span> / 5</p>
@@ -46,14 +43,14 @@
 
         <button class="save-btn" onclick="saveCharacter()">選択を保存</button>
         <div id="selectedText" class="selected-text"></div>
+        <p>
+          獲得済みキャラ一覧は  
+          <a id="linkToCharacters" href="#">こちら</a>
+        </p>
       </div>
     </div>
   </div>
 
-  <!-- JavaScriptの読み込み -->
   <script src="script/character.js"></script>
 </body>
 </html>
-
-
-
