@@ -1,4 +1,4 @@
-  require('dotenv').config();
+require('dotenv').config();
 
 const express = require('express');
 const line = require('@line/bot-sdk');
@@ -8,12 +8,6 @@ const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Render用：静的ファイルとルート表示対応
-app.use(express.static('public'));
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
 
 // LINE Bot設定
 const config = {
@@ -33,12 +27,18 @@ const supabase = createClient(
 process.on('uncaughtException', err => console.error('[uncaughtException]', err));
 process.on('unhandledRejection', reason => console.error('[unhandledRejection]', reason));
 
+// BodyParser／静的ファイル設定
 app.use(bodyParser.json({
-  verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
-  }
+  verify: (req, res, buf) => { req.rawBody = buf.toString(); }
 }));
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// トップページルーティング
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 
 // 📬 LINE Webhook本体
 app.post('/webhook', line.middleware(config), async (req, res) => {
@@ -49,27 +49,29 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     const text = event.message.text.trim();
 
     try {
-      await supabase.from('user_settings').upsert({ user_id: userId, notify: true });
+      // 通知フラグを常に on にしておく
+      await supabase
+        .from('user_settings')
+        .upsert({ user_id: userId, notify: true })
+        .eq('user_id', userId);
 
-      // 🔗 詳細設定
+      // 各コマンド処理
       if (/詳細設定/.test(text)) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: '🔗 詳細設定はこちら：\nhttps://tasukutasukuman.onrender.com/\n\n現在開発中の機能を含みます。不具合ご了承願います。'
+          text: '🔗 詳細設定はこちら：\nhttps://あなたのドメイン/\n\n現在開発中の機能を含みます。不具合ご了承願います。'
         });
         continue;
       }
-
-      // 🔗 人格設定
+      
       if (/人格設定/.test(text)) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: '🔗 人格設定はこちら：\nhttps://tray3forse-linebakugeki.onrender.com/\n\n現在開発中の機能を含みます。不具合ご了承願います。'
+          text: '🔗 人格設定はこちら：\nhttps://あなたのドメイン/zinkaku.html?userId=' + userId
         });
         continue;
       }
-
-      // 💣 やってない爆撃
+      
       if (/やってない/.test(text)) {
         await client.replyMessage(event.replyToken, [
           { type: 'text', text: '💣 やってない！？即対応しろ！' },
@@ -78,8 +80,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         ]);
         continue;
       }
-
-      // 💥 怠惰系爆撃
+      
       if (/めんどくさい|面倒|だるい/.test(text)) {
         await client.replyMessage(event.replyToken, [
           { type: 'text', text: '💥 サボりは許さない！爆撃モード発動！' },
@@ -88,8 +89,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         ]);
         continue;
       }
-
-      // 👁️ 放置トリガー
+      
       if (/放置|状況|時間経過/.test(text)) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
@@ -97,8 +97,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         });
         continue;
       }
-
-      // ✅ タスク完了
+      
       if (/^完了\s*/.test(text)) {
         const taskName = text.replace(/^完了\s*/, '').trim();
         if (!taskName) {
@@ -108,22 +107,19 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           });
           continue;
         }
-
         const { error } = await supabase
           .from('todos')
           .delete()
           .eq('user_id', userId)
           .eq('task', taskName);
         if (error) throw error;
-
         await client.replyMessage(event.replyToken, {
           type: 'text',
           text: `✅ タスク「${taskName}」を削除しました。`
         });
         continue;
       }
-
-      // 📝 タスク追加
+      
       if (/^(追加|登録)\s+/.test(text)) {
         const content = text.replace(/^(追加|登録)\s*/, '').trim();
         if (!content) {
@@ -133,7 +129,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           });
           continue;
         }
-
         const { data, error } = await supabase
           .from('todos')
           .insert({
@@ -145,7 +140,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           })
           .select();
         if (error) throw error;
-
         const id = data[0]?.id ?? '不明';
         await client.replyMessage(event.replyToken, {
           type: 'text',
@@ -153,8 +147,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         });
         continue;
       }
-
-      // 🔍 進捗確認
+      
       if (text === '進捗確認') {
         const { data, error } = await supabase
           .from('todos')
@@ -162,7 +155,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           .eq('user_id', userId)
           .order('date', { ascending: true });
         if (error) throw error;
-
         if (!data || data.length === 0) {
           await client.replyMessage(event.replyToken, {
             type: 'text',
@@ -170,12 +162,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           });
           continue;
         }
-
         const MAX = 500;
         const lines = data.map(t => `🔹 ${t.task}（${t.date || '未定'}） - ${t.status}`);
         const chunks = [];
         let buffer = '';
-
         for (const lineText of lines) {
           if ((buffer + '\n' + lineText).length > MAX) {
             chunks.push(buffer);
@@ -185,13 +175,12 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           }
         }
         if (buffer) chunks.push(buffer);
-
         const msgs = chunks.map(c => ({ type: 'text', text: c }));
         await client.replyMessage(event.replyToken, msgs);
         continue;
       }
-
-      // ℹ️ その他案内
+      
+      // デフォルトヘルプメッセージ
       await client.replyMessage(event.replyToken, {
         type: 'text',
         text: [
@@ -209,12 +198,37 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       console.error('[Webhook Error]', err);
     }
   }
-
   res.sendStatus(200);
+});
+
+
+// ✅ 通知キャラ選択用 API
+app.post('/api/character-select', async (req, res) => {
+  const { userId, name } = req.body;
+  if (!userId || !name) {
+    return res.status(400).json({ error: 'userIdとnameは必須です' });
+  }
+
+  try {
+    // user_settings テーブルに character_name を upsert
+    const { error } = await supabase
+      .from('user_settings')
+      .upsert({
+        user_id: userId,
+        notify: true,
+        character_name: name
+      })
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[Character Select API Error]', err);
+    return res.status(500).json({ error: '内部サーバーエラー' });
+  }
 });
 
 // ✅ サーバー起動
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`[DEBUG] Supabase URL: ${process.env.SUPABASE_URL || '未設定'}`);
 });
