@@ -9,7 +9,7 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 静的ファイル配信＆ルート
+// 静的ファイル配信＆ルート設定
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -37,7 +37,7 @@ process.on('unhandledRejection', (reason) =>
   console.error('[unhandledRejection]', reason)
 );
 
-// リクエストボディ取得
+// ボディパーサー
 app.use(
   bodyParser.json({
     verify: (req, res, buf) => {
@@ -47,7 +47,7 @@ app.use(
 );
 app.use(express.json());
 
-// 📬 LINE Webhook
+// 📬 LINE Webhook 本体
 app.post('/webhook', line.middleware(config), async (req, res) => {
   for (const event of req.body.events || []) {
     if (event.type !== 'message' || event.message.type !== 'text') continue;
@@ -56,13 +56,35 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     const text = event.message.text.trim();
 
     try {
-      // ── ここで upsert（onConflict付き）を実行 ──
+      // ── ここで upsert（onConflict:'user_id' 指定）を実行 ──
       await supabase
         .from('user_settings')
         .upsert(
           { user_id: userId, notify: true },
           { onConflict: 'user_id' }
         );
+
+      // ── デバッグ用：設定確認コマンド ──
+      if (text === '設定確認') {
+        const { data, error } = await supabase
+          .from('user_settings')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+
+        if (error) {
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: `❗️ 設定確認に失敗しました: ${error.message}`,
+          });
+        } else {
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: `✅ 現在の設定:\n${JSON.stringify(data, null, 2)}`,
+          });
+        }
+        continue;
+      }
 
       // 🔗 詳細設定
       if (/詳細設定/.test(text)) {
@@ -78,11 +100,12 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
       // 🔗 人格設定
       if (/人格設定/.test(text)) {
+        const url = `https://tray3forse-linebakugeki.onrender.com/zinkaku.html?userId=${userId}`;
         await client.replyMessage(event.replyToken, {
           type: 'text',
           text:
             '🔗 人格設定はこちら：\n' +
-            'https://tray3forse-linebakugeki.onrender.com/\n\n' +
+            `${url}\n\n` +
             '現在開発中の機能を含みます。不具合ご了承願います。',
         });
         continue;
@@ -237,10 +260,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   res.sendStatus(200);
 });
 
-// ✅ サーバー起動
+// サーバー起動
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(
-    `[DEBUG] Supabase URL: ${process.env.SUPABASE_URL || '未設定'}`
-  );
 });
