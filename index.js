@@ -56,7 +56,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     const text = event.message.text.trim();
 
     try {
-      // ── ここで upsert（onConflict:'user_id' 指定）を実行 ──
+      // ── user_settings テーブルに upsert ──
       await supabase
         .from('user_settings')
         .upsert(
@@ -64,7 +64,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           { onConflict: 'user_id' }
         );
 
-      // ── デバッグ用：設定確認コマンド ──
+      // ── 設定確認コマンド ──
       if (text === '設定確認') {
         const { data, error } = await supabase
           .from('user_settings')
@@ -108,6 +108,28 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
             `${url}\n\n` +
             '現在開発中の機能を含みます。不具合ご了承願います。',
         });
+        continue;
+      }
+
+      // 🧠 現在の人格
+      if (text === '現在の人格') {
+        const { data, error } = await supabase
+          .from('user_characters')
+          .select('character_key')
+          .eq('user_id', userId)
+          .single();
+
+        if (error || !data || !data.character_key) {
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '⚠️ 現在設定されている人格キャラはありません。',
+          });
+        } else {
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: `🧠 現在の人格キャラは「${data.character_key}」です。`,
+          });
+        }
         continue;
       }
 
@@ -247,6 +269,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           '・完了 タスク名',
           '・進捗確認',
           '・詳細設定／人格設定',
+          '・現在の人格',
           '・やってない／めんどくさい',
           '',
           '開発中の機能が含まれます。不具合ご了承願います。',
