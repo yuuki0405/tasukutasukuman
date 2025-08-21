@@ -14,7 +14,7 @@ const signupBtn = document.getElementById('signupBtn')
 if (form) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email: email.value,
       password: password.value
     })
@@ -28,6 +28,18 @@ if (form) {
       setTimeout(() => {
         window.location.href = 'Top.php'
       }, 1000)
+      
+       // フォームをPOSTしてPHPにemailを渡す
+      const hiddenForm = document.createElement('form')
+      hiddenForm.method = 'POST'
+      hiddenForm.action = '' // same page to set $_SESSION
+      const emailInput = document.createElement('input')
+      emailInput.type = 'hidden'
+      emailInput.name = 'email'
+      emailInput.value = email.value
+      hiddenForm.appendChild(emailInput)
+      document.body.appendChild(hiddenForm)
+      hiddenForm.submit()
     }
   })
 }
@@ -35,7 +47,7 @@ if (form) {
 // ✅ サインアップ処理（確認メール送信）
 if (signupBtn) {
   signupBtn.addEventListener('click', async () => {
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email: email.value,
       password: password.value
     })
@@ -45,7 +57,22 @@ if (signupBtn) {
       message.textContent = '登録失敗: ' + error.message
     } else {
       message.style.color = 'green'
-      message.textContent = '確認メールを送信しました。メールを確認してください。'
+      message.textContent = '登録完了！ログイン画面に戻ってログインをお願いします！'
+      setTimeout(() => {
+        window.location.href = 'Top.php'
+      }, 1000)
+
+      // フォームをPOSTしてPHPにemailを渡す
+      const hiddenForm = document.createElement('form')
+      hiddenForm.method = 'POST'
+      hiddenForm.action = '' // same page to set $_SESSION
+      const emailInput = document.createElement('input')
+      emailInput.type = 'hidden'
+      emailInput.name = 'email'
+      emailInput.value = email.value
+      hiddenForm.appendChild(emailInput)
+      document.body.appendChild(hiddenForm)
+      hiddenForm.submit()
     }
   })
 }
