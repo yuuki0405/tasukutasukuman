@@ -2,7 +2,7 @@
 const params = new URLSearchParams(window.location.search);
 const userId = params.get('userId');
 if (!userId) {
-  alert('userId が見つかりません。LINE から開き直してください。');
+  alert('userIdが見つかりません。LINEから開き直してください。');
   throw new Error('Missing userId');
 }
 
