@@ -1,24 +1,31 @@
-// URL パラメータから userId を取得
+// URLパラメータから userId を取得
 const params = new URLSearchParams(window.location.search);
 const userId = params.get('userId');
 const grid = document.getElementById('characterGrid');
 
 if (!userId) {
-  grid.innerHTML = '<p class="error">ユーザーIDが取得できませんでした。LINEからアクセスしてください。</p>';
+  grid.innerHTML = 
+    '<p class="error">ユーザーIDが取得できませんでした。LINEからアクセスしてください。</p>';
   throw new Error('Missing userId');
 }
+
+// フッターリンクにも userId を付与
+document.querySelectorAll('footer a').forEach(a => {
+  const url = new URL(a.getAttribute('href'), window.location.origin);
+  url.searchParams.set('userId', userId);
+  a.href = url.toString();
+});
 
 // localStorage から獲得キャラと選択中キャラを取得
 const owned = JSON.parse(localStorage.getItem('ownedCharacters') || '[]');
 const selectedName = localStorage.getItem('selectedCharacterName');
 
-// 取得キャラがない場合
+// キャラ未取得時のメッセージ
 if (owned.length === 0) {
   grid.innerHTML = '<p>まだキャラクターを獲得していません。</p>';
 } else {
   owned.forEach(char => {
     const isSelected = selectedName === char.name;
-
     const card = document.createElement('div');
     card.className = `card ${isSelected ? 'selected' : ''}`;
     card.innerHTML = `
@@ -28,11 +35,9 @@ if (owned.length === 0) {
         ${isSelected ? '✅ 現在の通知キャラ' : 'このキャラに設定'}
       </button>
     `;
-
     card.querySelector('.select-btn').addEventListener('click', () => {
       selectCharacter(char.name);
     });
-
     grid.appendChild(card);
   });
 }
@@ -50,9 +55,7 @@ function selectCharacter(name) {
   })
     .then(res => res.json())
     .then(json => {
-      if (json.error) {
-        throw new Error(json.error);
-      }
+      if (json.error) throw new Error(json.error);
       alert(`${name} を通知キャラに設定しました`);
       location.reload();
     })
@@ -61,4 +64,3 @@ function selectCharacter(name) {
       alert('設定に失敗しました。時間をおいて再度お試しください。');
     });
 }
-```
