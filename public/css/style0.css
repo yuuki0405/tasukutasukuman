@@ -23,11 +23,6 @@ header {
 
 .bomb-image {
   width: 300px;
-  height: 300px; /* ← 画像の縦横比に合わせて調整 */
-  margin: 0 auto;
-  background-image: url('bakuhatu.jpg'); /* ← ここにクリック対象の画像 */
-  background-size: cover;
-  background-position: center;
   cursor: pointer;
   transition: transform 0.1s;
 }
