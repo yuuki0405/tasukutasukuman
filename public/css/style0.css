@@ -1,0 +1,38 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  text-align: center;
+  background-image: url('../BackGround.jpg'); /* ← 好きな画像に変更 */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+header {
+  background-color: #2bdf08;
+  background: linear-gradient(to right,#de4141,#e8ac51,#f2e55c,#39a869,#4784bf,#5d5099,#a55b9a);
+  padding: 40px 0;
+  font-size: 48px;
+  font-weight: bold;
+}
+
+.container {
+  margin-top: 50px;
+}
+
+.bomb-image {
+  width: 300px;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.bomb-image:active {
+  transform: scale(0.95);
+}
+
+.message {
+  margin-top: 20px;
+  font-size: 24px;
+  color: #333;
+}
