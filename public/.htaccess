@@ -1,1 +1,14 @@
+# Apache のリライトエンジンを有効化
+RewriteEngine On
+
+# ルートアクセス（/）を /public/index.php にリダイレクト
+RewriteRule ^$ public/index.php [L]
+
+# 他の PHP ファイルや静的ファイルはそのまま処理
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ public/$1 [L]
+
+# デフォルトで読み込むファイルを指定
 DirectoryIndex index.php
+
