@@ -1,3 +1,6 @@
+<?php
+session_start();
+?>
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -15,13 +18,13 @@
             <div class="header-logo">🧠 LINE爆撃くん</div>
             <nav class="nav-menu">
             <ul>
-              <li><a href="index.html">📝 新規会員登録/ログイン</a></li>
-              <li><a href="Top.html">🏠 ホーム</a></li>
-              <li><a href="goningumi.html">👥 グループ情報</a></li>
+              <li><a href="login.php">📝 新規会員登録/ログイン</a></li>
+              <li><a href="Top.php">🏠 ホーム</a></li>
+              <li><a href="goningumi.php">👥 グループ情報</a></li>
               <li><a href="">👤 マイページ（ユーザー情報）</a> </li>
-              <li><a href="zinkaku.html">🔔 通知キャラ設定ガチャ</a> </li>
-              <li><a href="ranking.html">🏆さぼりランキング</a></li>
-              <li><a href="index.html">ログアウト</a> </li>
+              <li><a href="zinkaku.php">🔔 通知キャラ設定ガチャ</a> </li>
+              <li><p><?php echo $_SESSION['email'] ?></p></li>
+              <li><a href="login.php">ログアウト</a> </li>
             </ul>
             </nav>
         </header>
