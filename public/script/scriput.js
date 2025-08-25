@@ -90,6 +90,10 @@ function sendNotification(task) {
 document.getElementById('taskForm').addEventListener('submit', async (e) => {
   e.preventDefault()
 
+  const task = taskInput.value.trim()
+  const date = dateInput.value
+  const time = timeInput.value
+
    const { data, error } = await supabase
   .from('todos')
   .insert([{ task, date, time }])
