@@ -5,4 +5,4 @@ services:
     plan: free
     branch: main
     region: oregon
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./public/Dockerfile
