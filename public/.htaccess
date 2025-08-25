@@ -7,7 +7,7 @@ RewriteRule ^$ public/index.php [L]
 # 他の PHP ファイルや静的ファイルはそのまま処理
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(.*)$ public/$1 [L]
+RewriteRule ^(.*)$ $1 [L]
 
 # デフォルトで読み込むファイルを指定
 DirectoryIndex index.php
