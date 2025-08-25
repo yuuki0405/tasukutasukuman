@@ -20,7 +20,7 @@
   <!-- フッター -->
   <footer class="footer">
     <ul>
-      <li><a href="mypage.html">👤 マイページ（ユーザー情報）へ</a></li>
+      <li><a href="mypage.php">👤 マイページ（ユーザー情報）へ</a></li>
     </ul>
     <p>© 2025 LINE爆撃くん</p>
   </footer>
