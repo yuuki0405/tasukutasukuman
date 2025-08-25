@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <title>LINE爆撃君</title>
   <link rel="stylesheet" href="css/style0.css">
+  <!-- Supabase JSライブラリ -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 </head>
 <body>
 
@@ -16,17 +18,43 @@
       class="bomb-image"
       id="clickableImage"
     />
-    <div class="message">LINE爆撃君を爆撃しよう！（画像を10回クリックしてね！）<br>このサイトに対して攻撃は絶対にやめてください🥺🥺🥺お願いします<br>(これはフリではありません）マジでお願いします</div>
+    <div class="message">
+      LINE爆撃君を爆撃しよう！（画像を10回クリックしてね！）<br>
+      このサイトに対して攻撃は絶対にやめてください🥺🥺🥺お願いします<br>
+      (これはフリではありません）マジでお願いします
+    </div>
   </div>
 
   <script>
+    // Supabaseクライアント初期化
+    const supabase = supabase.createClient(
+      'https://xxxx.supabase.co',         // ← SupabaseのURLに置き換えてください
+      'your-anon-key'                     // ← 公開用anonキーに置き換えてください
+    );
+
     let clickCount = 0;
     const image = document.getElementById('clickableImage');
 
-    image.addEventListener('click', () => {
+    image.addEventListener('click', async () => {
       clickCount++;
-      if (clickCount >= 1) {
-        window.location.href = 'login.php'; // ← 遷移先を変更可能
+      if (clickCount >= 10) {
+        // タスク登録処理
+        const { data, error } = await supabase
+          .from('todos')
+          .insert({
+            user_id: 'web_user',               // ← 任意のID（LINE未連携なら仮IDでもOK）
+            task: 'Webから爆撃登録',
+            status: '未完了',
+            date: new Date().toISOString().split('T')[0],
+            time: null,
+          });
+
+        if (error) {
+          alert('❌ 登録失敗: ' + error.message);
+        } else {
+          alert('✅ タスク登録成功！');
+          window.location.href = 'login.php'; // 登録後に遷移
+        }
       }
     });
   </script>
