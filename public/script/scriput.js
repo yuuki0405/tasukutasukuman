@@ -2,49 +2,30 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js'
 
 const supabase = createClient(
   'https://bteklaezhlfmjylybrlh.supabase.co',
-  'YOUR_ANON_KEY'
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0ZWtsYWV6aGxmbWp5bHlicmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAzMTEzNDYsImV4cCI6MjA2NTg4NzM0Nn0.8YP7M1soC5NpuuhgtmDUB2cL2y6W3yfmL4rgSxaS0TE'
 )
 
-document.getElementById('taskForm').addEventListener('submit', async (e) => {
-  e.preventDefault()
-  const taskText = document.getElementById('taskInput').value.trim()
-  const date = document.getElementById('dateInput').value
-  const time = document.getElementById('timeInput').value
+const taskInput = document.getElementById('taskInput')
+const dateInput = document.getElementById('dateInput')
+const timeInput = document.getElementById('timeInput')
+const taskList = document.getElementById('taskList')
+const message = document.getElementById('message')
 
-  if (!taskText || !date || !time) {
-    document.getElementById('message').textContent = '全ての項目を入力してください。'
-    return
-  }
-
-  // date と time を ISO 形式にマージ
-  const dateTime = `${date}T${time}`
-
-  const { data, error } = await supabase
-    .from('todos')
-    .insert([{ task_text: taskText, date_time: dateTime, done: false }])
-
-  if (error) {
-    document.getElementById('message').textContent = '追加失敗: ' + error.message
-  } else {
-    document.getElementById('message').textContent = '追加完了！'
-    e.target.reset()
-    loadTasks()
-  }
-})
-
+// タスク一覧を読み込む
 async function loadTasks() {
   const { data, error } = await supabase
     .from('todos')
     .select('*')
-    .order('date_time', { ascending: true })
+    .order('date', { ascending: true })
 
   if (error) {
-    document.getElementById('message').textContent = '読み込み失敗: ' + error.message
+    console.error('読み込み失敗:', error.message)
+    message.textContent = 'タスクの読み込みに失敗しました。'
     return
   }
+
   renderTasks(data)
 }
-
 
 // タスクを表示
 function renderTasks(tasks) {
