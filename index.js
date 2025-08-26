@@ -4,6 +4,8 @@ const line = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
 const bodyParser = require('body-parser');
 const path = require('path');
+const cron = require('node-cron');
+const dayjs = require('dayjs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -42,17 +44,15 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   for (const event of req.body.events || []) {
     if (event.type !== 'message' || event.message.type !== 'text') continue;
 
-    const lineUserId = event.source.userId; // LINEユーザーID（UUID型ではない）
+    const lineUserId = event.source.userId;
     const text = event.message.text.trim();
 
     try {
-      // =========================
+      // -----------------------
       // タスク追加（日付＋時間対応）
-      // コマンド例: 「追加 筋トレ 2025-08-30 21:00」
-      // =========================
+      // -----------------------
       if (/^(追加|登録)\s+/.test(text)) {
         const parts = text.replace(/^(追加|登録)\s*/, '').trim().split(/\s+/);
-
         const content = parts[0] || null;
         const datePart = parts[1] || null;
         const timePart = parts[2] || null;
@@ -66,8 +66,8 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         }
 
         const today = new Date();
-        let deadlineDate = datePart || today.toISOString().split('T')[0];
-        let deadlineTime = timePart || null;
+        const deadlineDate = datePart || today.toISOString().split('T')[0];
+        const deadlineTime = timePart || null;
 
         const { data, error } = await supabase
           .from('todos')
@@ -77,6 +77,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
             status: '未完了',
             date: deadlineDate,
             time: deadlineTime,
+            is_notified: false, // 爆撃済みフラグ
           })
           .select();
 
@@ -89,9 +90,9 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // =========================
+      // -----------------------
       // 締め切り確認
-      // =========================
+      // -----------------------
       if (text === '締め切り確認') {
         const { data, error } = await supabase
           .from('todos')
@@ -120,9 +121,9 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // =========================
+      // -----------------------
       // タスク削除
-      // =========================
+      // -----------------------
       if (/^完了\s*/.test(text)) {
         const taskName = text.replace(/^完了\s*/, '').trim();
         if (!taskName) {
@@ -133,7 +134,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           continue;
         }
 
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('todos')
           .delete()
           .eq('user_id', lineUserId)
@@ -148,9 +149,9 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // =========================
+      // -----------------------
       // 通常の進捗確認
-      // =========================
+      // -----------------------
       if (text === '進捗確認') {
         const { data, error } = await supabase
           .from('todos')
@@ -171,7 +172,9 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
+      // -----------------------
       // デフォルト応答
+      // -----------------------
       await client.replyMessage(event.replyToken, {
         type: 'text',
         text: [
@@ -190,6 +193,45 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   }
 
   res.sendStatus(200);
+});
+
+// -----------------------
+// 定期爆撃チェック
+// -----------------------
+cron.schedule('* * * * *', async () => {
+  console.log('⏰ 締め切り爆撃チェック実行');
+
+  const now = dayjs();
+
+  const { data, error } = await supabase
+    .from('todos')
+    .select('id, user_id, task, date, time, status, is_notified')
+    .eq('status', '未完了')
+    .neq('is_notified', true);
+
+  if (error) {
+    console.error('[爆撃チェックエラー]', error);
+    return;
+  }
+
+  for (const t of data) {
+    if (!t.date || !t.time) continue;
+
+    const deadline = dayjs(`${t.date} ${t.time}`, 'YYYY-MM-DD HH:mm');
+    if (deadline.isBefore(now)) {
+      console.log(`💣 爆撃対象: ${t.task}`);
+
+      await client.pushMessage(t.user_id, [
+        { type: 'text', text: `💣 タスク「${t.task}」の締め切りを過ぎています！今すぐ対応してください！` },
+        { type: 'sticker', packageId: '446', stickerId: '1988' }
+      ]);
+
+      await supabase
+        .from('todos')
+        .update({ is_notified: true })
+        .eq('id', t.id);
+    }
+  }
 });
 
 // サーバー起動
