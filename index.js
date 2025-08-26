@@ -136,7 +136,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         const { error } = await supabase
           .from('todos')
           .delete()
-          .eq('task', taskName);
+          .eq('text', taskName);
 
         if (error) throw error;
 
