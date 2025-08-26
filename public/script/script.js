@@ -13,7 +13,7 @@ const message = document.getElementById('message')
 
 // タスク一覧を読み込む
 async function loadTasks() {
-  const { data: todos, error } = await supabase
+  const { data, error } = await supabase
     .from('todos')
     .select('*')
     .order('date', { ascending: true })
@@ -93,11 +93,6 @@ document.getElementById('taskForm').addEventListener('submit', async (e) => {
   const task = taskInput.value.trim()
   const date = dateInput.value
   const time = timeInput.value
-
-   const { data, error } = await supabase
-  .from('todos')
-  .insert([{ task, date, time }])
-
 
   if (!task || !date || !time) {
     message.textContent = '全ての項目を入力してください。'
