@@ -129,8 +129,8 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         const { error } = await supabase
           .from('todos')
           .delete()
-          .eq('user_id', lineUserId)
           .eq('task', taskName);
+        
         if (error) throw error;
 
         await client.replyMessage(event.replyToken, { type: 'text', text: `✅ タスク「${taskName}」を削除しました。` });
