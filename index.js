@@ -46,10 +46,9 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     try {
       // --- タスク追加 ---
-      // 例: 「追加 宿題 2025-08-30 21:00」
       if (/^(追加|登録)\s+/.test(text)) {
         const parts = text.replace(/^(追加|登録)\s*/, '').trim().split(/\s+/);
-        const taskText = parts[0] || null; // todos.task カラム想定
+        const taskText = parts[0] || null;
         const datePart = parts[1] || null;
         const timePart = parts[2] || null;
 
@@ -66,7 +65,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         const deadlineTime = timePart || null;
 
         const { error } = await supabase
-          .from('todos') // テーブル統一
+          .from('todos')
           .insert({
             user_id: lineUserId,
             task: taskText,
@@ -85,7 +84,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // --- 締め切り確認（即爆撃） ---
+      // --- 締め切り確認 ---
       if (text === '締め切り確認') {
         const { data, error } = await supabase
           .from('todos')
@@ -183,11 +182,19 @@ cron.schedule('* * * * *', async () => {
 
   for (const row of data) {
     if (!row.date || !row.time) continue;
+
     if (dayjs(`${row.date} ${row.time}`).isBefore(now)) {
-      await client.pushMessage(row.user_id, [
-        { type: 'text', text: `💣 タスク「${row.task}」の締め切りを過ぎています！` },
-        { type: 'sticker', packageId: '446', stickerId: '1988' }
-      ]);
+      // ステッカー → テキスト順で通知
+      await client.pushMessage(row.user_id, {
+        type: 'sticker',
+        packageId: '446',
+        stickerId: '1988'
+      });
+
+      await client.pushMessage(row.user_id, {
+        type: 'text',
+        text: `💣 まだ終わってないタスク「${row.task}」を早くやれ！！`
+      });
 
       await supabase
         .from('todos')
