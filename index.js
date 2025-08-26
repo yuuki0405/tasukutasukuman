@@ -90,7 +90,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         const { data, error } = await supabase
           .from('todos')
           .select('id, task, date, time, status, is_notified')
-          .eq('user_id', lineUserId)
           .order('date', { ascending: true })
           .order('time', { ascending: true });
 
