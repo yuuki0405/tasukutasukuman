@@ -65,10 +65,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         const deadlineTime = timePart || null;
 
         const { error } = await supabase
-          .from('プロジェクト')
+          .from('todos')
           .insert({
             user_id: lineUserId,
-            text: taskText,
+            task: taskText,          // ← task に修正
             date: deadlineDate,
             time: deadlineTime,
             is_notified: false
@@ -86,8 +86,8 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       // --- 締め切り確認（即爆撃） ---
       if (text === '締め切り確認') {
         const { data, error } = await supabase
-          .from('プロジェクト')
-          .select('id, text, date, time, is_notified')
+          .from('todos')
+          .select('id, task, date, time, is_notified')
           .eq('user_id', lineUserId)
           .order('date', { ascending: true })
           .order('time', { ascending: true });
@@ -103,16 +103,16 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           const deadlineStr = `${row.date || ''} ${row.time || ''}`.trim();
           const overdue = row.date && row.time && dayjs(`${row.date} ${row.time}`).isBefore(now);
 
-          lines.push(`🔹 ${row.text} - ${deadlineStr || '未定'}`);
+          lines.push(`🔹 ${row.task} - ${deadlineStr || '未定'}`);
 
           if (overdue && !row.is_notified) {
             await client.pushMessage(lineUserId, [
-              { type: 'text', text: `💣 タスク「${row.text}」の締め切りを過ぎています！` },
+              { type: 'text', text: `💣 タスク「${row.task}」の締め切りを過ぎています！` },
               { type: 'sticker', packageId: '446', stickerId: '1988' }
             ]);
 
             await supabase
-              .from('プロジェクト')
+              .from('todos')
               .update({ is_notified: true })
               .eq('id', row.id);
           }
@@ -134,9 +134,9 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         }
 
         const { error } = await supabase
-          .from('プロジェクト')
+          .from('todos')
           .delete()
-          .eq('text', taskName);
+          .eq('task', taskName);   // ← text → task に修正
 
         if (error) throw error;
 
@@ -168,8 +168,8 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 cron.schedule('* * * * *', async () => {
   const now = dayjs();
   const { data, error } = await supabase
-    .from('プロジェクト')
-    .select('id, user_id, text, date, time, is_notified')
+    .from('todos')
+    .select('id, user_id, task, date, time, is_notified')
     .neq('is_notified', true)
     .order('date', { ascending: true })
     .order('time', { ascending: true });
@@ -183,12 +183,12 @@ cron.schedule('* * * * *', async () => {
     if (!row.date || !row.time) continue;
     if (dayjs(`${row.date} ${row.time}`).isBefore(now)) {
       await client.pushMessage(row.user_id, [
-        { type: 'text', text: `💣 タスク「${row.text}」の締め切りを過ぎています！` },
+        { type: 'text', text: `💣 タスク「${row.task}」の締め切りを過ぎています！` },
         { type: 'sticker', packageId: '446', stickerId: '1988' }
       ]);
 
       await supabase
-        .from('プロジェクト')
+        .from('todos')
         .update({ is_notified: true })
         .eq('id', row.id);
     }
