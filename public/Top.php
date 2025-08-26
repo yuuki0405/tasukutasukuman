@@ -86,6 +86,6 @@ if (empty($_SESSION['email'])) {
     </main>
   </div>
 
-  <script type="module" src="script/scriput.js"></script>
+  <script type="module" src="script/script.js"></script>
 </body>
 </html>
