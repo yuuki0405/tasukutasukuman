@@ -10,6 +10,7 @@ const dayjs = require('dayjs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// 静的ファイル
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -22,7 +23,7 @@ const config = {
 };
 const client = new line.Client(config);
 
-// Supabase設定（Service Role Keyはサーバー専用）
+// Supabase設定
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -45,7 +46,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     try {
       // --- タスク追加 ---
-      // 例: 「追加 タスク内容 2025-08-30 21:00」
       if (/^(追加|登録)\s+/.test(text)) {
         const parts = text.replace(/^(追加|登録)\s*/, '').trim().split(/\s+/);
         const taskText = parts[0] || null;
@@ -53,7 +53,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         const timePart = parts[2] || null;
 
         if (!taskText) {
-          await client.replyMessage(event.replyToken, { type: 'text', text: '⚠️ 内容を指定してください。\n例: 追加 買い物 2025-08-30 21:00' });
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '⚠️ 内容を指定してください。\n例: 追加 買い物 2025-08-30 21:00'
+          });
           continue;
         }
 
@@ -62,10 +65,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         const deadlineTime = timePart || null;
 
         const { error } = await supabase
-          .from('プロジェクト') // テーブル名
+          .from('プロジェクト')
           .insert({
             user_id: lineUserId,
-            text: taskText,  // タスク内容
+            text: taskText,
             date: deadlineDate,
             time: deadlineTime,
             is_notified: false
@@ -119,21 +122,28 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // --- 完了（削除） ---
+      // --- 完了（削除） --- ※ user_id条件は追加しない
       if (/^完了\s*/.test(text)) {
         const taskName = text.replace(/^完了\s*/, '').trim();
         if (!taskName) {
-          await client.replyMessage(event.replyToken, { type: 'text', text: '⚠️ 完了するタスク名を指定してください' });
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '⚠️ 完了するタスク名を指定してください'
+          });
           continue;
         }
 
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('プロジェクト')
           .delete()
           .eq('text', taskName);
 
         if (error) throw error;
-        await client.replyMessage(event.replyToken, { type: 'text', text: `✅ タスク「${taskName}」を削除しました。` });
+
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: `✅ タスク「${taskName}」を削除しました。`
+        });
         continue;
       }
 
@@ -145,19 +155,24 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     } catch (err) {
       console.error('[Webhook Error]', err);
-      await client.replyMessage(event.replyToken, { type: 'text', text: `❗️エラー: ${err.message}` });
+      await client.replyMessage(event.replyToken, {
+        type: 'text',
+        text: `❗️エラー: ${err.message}`
+      });
     }
   }
   res.sendStatus(200);
 });
 
-// ===== 定期爆撃チェック（毎分） =====
+// ===== 定期爆撃チェック =====
 cron.schedule('* * * * *', async () => {
   const now = dayjs();
   const { data, error } = await supabase
     .from('プロジェクト')
     .select('id, user_id, text, date, time, is_notified')
-    .neq('is_notified', true);
+    .neq('is_notified', true)
+    .order('date', { ascending: true })
+    .order('time', { ascending: true });
 
   if (error) {
     console.error('[爆撃チェックエラー]', error);
