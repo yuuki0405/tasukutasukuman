@@ -133,7 +133,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           continue;
         }
 
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('todos')
           .delete()
           .eq('user_id', lineUserId)
