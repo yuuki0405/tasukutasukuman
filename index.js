@@ -10,7 +10,6 @@ const dayjs = require('dayjs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 静的ファイル
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -20,24 +19,19 @@ app.get('/', (req, res) => {
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.CHANNEL_SECRET,
-  timeout: 10000,
 };
 const client = new line.Client(config);
 
-// Supabase（Service Role Keyはサーバー専用）
+// Supabase設定
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// 例外ハンドリング
 process.on('uncaughtException', err => console.error('[uncaughtException]', err));
 process.on('unhandledRejection', reason => console.error('[unhandledRejection]', reason));
 
-// Body parser
-app.use(bodyParser.json({
-  verify: (req, res, buf) => { req.rawBody = buf.toString(); }
-}));
+app.use(bodyParser.json({ verify: (req, res, buf) => { req.rawBody = buf.toString(); }}));
 
 // LINE Webhook
 app.post('/webhook', line.middleware(config), async (req, res) => {
@@ -46,9 +40,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     const lineUserId = event.source.userId;
     const text = event.message.text.trim();
+    const now = dayjs();
 
     try {
-      // ===== タスク追加（日付＋時間対応） =====
+      // ===== タスク追加 =====
       if (/^(追加|登録)\s+/.test(text)) {
         const parts = text.replace(/^(追加|登録)\s*/, '').trim().split(/\s+/);
         const content = parts[0] || null;
@@ -56,10 +51,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         const timePart = parts[2] || null;
 
         if (!content) {
-          await client.replyMessage(event.replyToken, {
-            type: 'text',
-            text: '⚠️ タスク内容を指定してください。\n例: 追加 宿題 2025-08-30 21:00'
-          });
+          await client.replyMessage(event.replyToken, { type: 'text', text: '⚠️ 内容を指定してください。\n例: 追加 宿題 2025-08-30 21:00' });
           continue;
         }
 
@@ -87,10 +79,8 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // ===== 締め切り確認（その場で爆撃） =====
+      // ===== 締め切り確認（即爆撃） =====
       if (text === '締め切り確認') {
-        const now = dayjs();
-
         const { data, error } = await supabase
           .from('todos')
           .select('id, task, date, time, status, is_notified')
@@ -99,7 +89,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           .order('time', { ascending: true });
 
         if (error) throw error;
-        if (!data || data.length === 0) {
+        if (!data.length) {
           await client.replyMessage(event.replyToken, { type: 'text', text: '📭 タスクは登録されていません。' });
           continue;
         }
@@ -124,28 +114,25 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           }
         }
 
-        await client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: lines.join('\n')
-        });
+        await client.replyMessage(event.replyToken, { type: 'text', text: lines.join('\n') });
         continue;
       }
 
-      // ===== タスク削除 =====
+      // ===== 完了（削除） =====
       if (/^完了\s*/.test(text)) {
         const taskName = text.replace(/^完了\s*/, '').trim();
         if (!taskName) {
-          await client.replyMessage(event.replyToken, { type: 'text', text: '⚠️ 完了するタスク名を指定してください。' });
+          await client.replyMessage(event.replyToken, { type: 'text', text: '⚠️ 完了するタスク名を指定してください' });
           continue;
         }
 
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('todos')
           .delete()
           .eq('user_id', lineUserId)
           .eq('task', taskName);
-
         if (error) throw error;
+
         await client.replyMessage(event.replyToken, { type: 'text', text: `✅ タスク「${taskName}」を削除しました。` });
         continue;
       }
@@ -154,13 +141,13 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       if (text === '進捗確認') {
         const { data, error } = await supabase
           .from('todos')
-          .select('*')
+          .select('task, date, time, status')
           .eq('user_id', lineUserId)
           .order('date', { ascending: true })
           .order('time', { ascending: true });
 
         if (error) throw error;
-        if (!data || data.length === 0) {
+        if (!data.length) {
           await client.replyMessage(event.replyToken, { type: 'text', text: '📭 タスクは登録されていません。' });
           continue;
         }
@@ -173,13 +160,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       // ===== デフォルト応答 =====
       await client.replyMessage(event.replyToken, {
         type: 'text',
-        text: [
-          '📌 コマンド:',
-          '・追加 タスク名 [日付] [時間]',
-          '・締め切り確認',
-          '・完了 タスク名',
-          '・進捗確認'
-        ].join('\n'),
+        text: '📌 コマンド:\n追加 タスク名 [日付] [時間]\n締め切り確認\n完了 タスク名\n進捗確認'
       });
 
     } catch (err) {
@@ -187,15 +168,12 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       await client.replyMessage(event.replyToken, { type: 'text', text: `❗️エラー: ${err.message}` });
     }
   }
-
   res.sendStatus(200);
 });
 
-// ===== 定期爆撃チェック =====
+// ===== 定期爆撃チェック（毎分） =====
 cron.schedule('* * * * *', async () => {
-  console.log('⏰ 締め切り爆撃チェック実行');
   const now = dayjs();
-
   const { data, error } = await supabase
     .from('todos')
     .select('id, user_id, task, date, time, status, is_notified')
@@ -209,14 +187,11 @@ cron.schedule('* * * * *', async () => {
 
   for (const t of data) {
     if (!t.date || !t.time) continue;
-
-    const deadline = dayjs(`${t.date} ${t.time}`, 'YYYY-MM-DD HH:mm');
-    if (deadline.isBefore(now)) {
+    if (dayjs(`${t.date} ${t.time}`).isBefore(now)) {
       await client.pushMessage(t.user_id, [
         { type: 'text', text: `💣 タスク「${t.task}」の締め切りを過ぎています！今すぐ対応してください！` },
         { type: 'sticker', packageId: '446', stickerId: '1988' }
       ]);
-
       await supabase
         .from('todos')
         .update({ is_notified: true })
@@ -225,7 +200,4 @@ cron.schedule('* * * * *', async () => {
   }
 });
 
-// サーバー起動
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
