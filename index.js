@@ -46,16 +46,17 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     try {
       // --- タスク追加 ---
+      // 例: 「追加 宿題 2025-08-30 21:00」
       if (/^(追加|登録)\s+/.test(text)) {
         const parts = text.replace(/^(追加|登録)\s*/, '').trim().split(/\s+/);
-        const taskText = parts[0] || null;
+        const taskText = parts[0] || null; // todos.task カラム想定
         const datePart = parts[1] || null;
         const timePart = parts[2] || null;
 
         if (!taskText) {
           await client.replyMessage(event.replyToken, {
             type: 'text',
-            text: '⚠️ 内容を指定してください。\n例: 追加 買い物 2025-08-30 21:00'
+            text: '⚠️ 内容を指定してください。\n例: 追加 宿題 2025-08-30 21:00'
           });
           continue;
         }
@@ -65,12 +66,13 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         const deadlineTime = timePart || null;
 
         const { error } = await supabase
-          .from('todos')
+          .from('todos') // テーブル統一
           .insert({
             user_id: lineUserId,
-            task: taskText,          // ← task に修正
+            task: taskText,
             date: deadlineDate,
             time: deadlineTime,
+            status: '未完了',
             is_notified: false
           });
 
@@ -87,7 +89,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       if (text === '締め切り確認') {
         const { data, error } = await supabase
           .from('todos')
-          .select('id, task, date, time, is_notified')
+          .select('id, task, date, time, status, is_notified')
           .eq('user_id', lineUserId)
           .order('date', { ascending: true })
           .order('time', { ascending: true });
@@ -103,9 +105,9 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           const deadlineStr = `${row.date || ''} ${row.time || ''}`.trim();
           const overdue = row.date && row.time && dayjs(`${row.date} ${row.time}`).isBefore(now);
 
-          lines.push(`🔹 ${row.task} - ${deadlineStr || '未定'}`);
+          lines.push(`🔹 ${row.task} - ${deadlineStr || '未定'} [${row.status}]`);
 
-          if (overdue && !row.is_notified) {
+          if (overdue && row.status === '未完了' && !row.is_notified) {
             await client.pushMessage(lineUserId, [
               { type: 'text', text: `💣 タスク「${row.task}」の締め切りを過ぎています！` },
               { type: 'sticker', packageId: '446', stickerId: '1988' }
@@ -122,7 +124,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // --- 完了（削除） --- ※ user_id条件は追加しない
+      // --- 完了（削除） ---
       if (/^完了\s*/.test(text)) {
         const taskName = text.replace(/^完了\s*/, '').trim();
         if (!taskName) {
@@ -136,7 +138,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         const { error } = await supabase
           .from('todos')
           .delete()
-          .eq('task', taskName);   // ← text → task に修正
+          .eq('task', taskName);
 
         if (error) throw error;
 
@@ -164,12 +166,13 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   res.sendStatus(200);
 });
 
-// ===== 定期爆撃チェック =====
+// ===== 定期爆撃チェック（毎分） =====
 cron.schedule('* * * * *', async () => {
   const now = dayjs();
   const { data, error } = await supabase
     .from('todos')
-    .select('id, user_id, task, date, time, is_notified')
+    .select('id, user_id, task, date, time, status, is_notified')
+    .eq('status', '未完了')
     .neq('is_notified', true)
     .order('date', { ascending: true })
     .order('time', { ascending: true });
