@@ -22,8 +22,7 @@ const config = {
 };
 const client = new line.Client(config);
 
-// Supabase設定
-// サービスロールキーはサーバー側だけで安全に保持
+// Supabase（Service Role Keyはサーバー専用）
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -43,29 +42,41 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   for (const event of req.body.events || []) {
     if (event.type !== 'message' || event.message.type !== 'text') continue;
 
-    const lineUserId = event.source.userId; // LINEのユーザーID（UUID型ではない）
+    const lineUserId = event.source.userId; // LINEユーザーID（UUID型ではない）
     const text = event.message.text.trim();
 
     try {
-      // 開発簡易: LINE ID を user_id にそのまま保存する場合はテーブル側をTEXT型に
-      // UUID型で運用するなら、ここでSupabase Authとの紐付けが必要
-
-      // タスク追加
+      // =========================
+      // タスク追加（日付＋時間対応）
+      // コマンド例: 「追加 筋トレ 2025-08-30 21:00」
+      // =========================
       if (/^(追加|登録)\s+/.test(text)) {
-        const content = text.replace(/^(追加|登録)\s*/, '').trim();
+        const parts = text.replace(/^(追加|登録)\s*/, '').trim().split(/\s+/);
+
+        const content = parts[0] || null;
+        const datePart = parts[1] || null;
+        const timePart = parts[2] || null;
+
         if (!content) {
-          await client.replyMessage(event.replyToken, { type: 'text', text: '⚠️ タスク内容を指定してください。' });
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '⚠️ タスク内容を指定してください。\n例: 追加 宿題 2025-08-30 21:00'
+          });
           continue;
         }
+
+        const today = new Date();
+        let deadlineDate = datePart || today.toISOString().split('T')[0];
+        let deadlineTime = timePart || null;
 
         const { data, error } = await supabase
           .from('todos')
           .insert({
-            user_id: lineUserId, // TEXT型ならOK、UUID型なら事前変換orAuthUIDに
+            user_id: lineUserId,
             task: content,
             status: '未完了',
-            date: new Date().toISOString().split('T')[0],
-            time: null,
+            date: deadlineDate,
+            time: deadlineTime,
           })
           .select();
 
@@ -73,35 +84,52 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: `🆕 タスク「${content}」を登録しました！（ID: ${data[0]?.id ?? '不明'}）`,
+          text: `🆕 タスク「${content}」を登録しました${deadlineTime ? `（締め切り ${deadlineDate} ${deadlineTime}）` : ''}`
         });
         continue;
       }
 
-      // 進捗確認
-      if (text === '進捗確認') {
+      // =========================
+      // 締め切り確認
+      // =========================
+      if (text === '締め切り確認') {
         const { data, error } = await supabase
           .from('todos')
-          .select('*')
+          .select('task, date, time, status')
           .eq('user_id', lineUserId)
-          .order('date', { ascending: true });
+          .order('date', { ascending: true })
+          .order('time', { ascending: true });
 
         if (error) throw error;
+
         if (!data || data.length === 0) {
-          await client.replyMessage(event.replyToken, { type: 'text', text: '📭 タスクは登録されていません。' });
+          await client.replyMessage(event.replyToken, {
+            type: 'text', text: '📭 タスクは登録されていません。'
+          });
           continue;
         }
 
-        const lines = data.map(t => `🔹 ${t.task}（${t.date || '未定'}） - ${t.status}`);
-        await client.replyMessage(event.replyToken, { type: 'text', text: lines.join('\n') });
+        const lines = data.map(t =>
+          `🔹 ${t.task} - ${t.date || '未定'} ${t.time || ''} [${t.status}]`
+        );
+
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: lines.join('\n')
+        });
         continue;
       }
 
+      // =========================
       // タスク削除
+      // =========================
       if (/^完了\s*/.test(text)) {
         const taskName = text.replace(/^完了\s*/, '').trim();
         if (!taskName) {
-          await client.replyMessage(event.replyToken, { type: 'text', text: '⚠️ 完了するタスク名を指定してください。' });
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '⚠️ 完了するタスク名を指定してください（例: 完了 宿題）'
+          });
           continue;
         }
 
@@ -112,14 +140,47 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           .eq('task', taskName);
 
         if (error) throw error;
-        await client.replyMessage(event.replyToken, { type: 'text', text: `✅ タスク「${taskName}」を削除しました。` });
+
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: `✅ タスク「${taskName}」を削除しました。`
+        });
+        continue;
+      }
+
+      // =========================
+      // 通常の進捗確認
+      // =========================
+      if (text === '進捗確認') {
+        const { data, error } = await supabase
+          .from('todos')
+          .select('*')
+          .eq('user_id', lineUserId)
+          .order('date', { ascending: true })
+          .order('time', { ascending: true });
+
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+          await client.replyMessage(event.replyToken, { type: 'text', text: '📭 タスクは登録されていません。' });
+          continue;
+        }
+
+        const lines = data.map(t => `🔹 ${t.task}（${t.date || '未定'} ${t.time || ''}） - ${t.status}`);
+        await client.replyMessage(event.replyToken, { type: 'text', text: lines.join('\n') });
         continue;
       }
 
       // デフォルト応答
       await client.replyMessage(event.replyToken, {
         type: 'text',
-        text: '📌 コマンド:\n追加 タスク名\n完了 タスク名\n進捗確認',
+        text: [
+          '📌 コマンド:',
+          '・追加 タスク名 [日付] [時間]',
+          '・締め切り確認',
+          '・完了 タスク名',
+          '・進捗確認',
+        ].join('\n'),
       });
 
     } catch (err) {
