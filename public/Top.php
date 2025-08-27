@@ -60,25 +60,7 @@ if (empty($_SESSION['email'])) {
       <h2>タスク一覧</h2>
       <div id="taskList"></div>
 
-      <form onsubmit="sendMessage(event)">
-        <input type="text" name="message" value="こんにちは！また会えて嬉しいです！" />
-        <button type="submit">保存済ユーザーに送信</button>
-      </form>
-
-      <script>
-        async function sendMessage(e) {
-          e.preventDefault();
-          const message = e.target.message.value;
-
-          await fetch('/.netlify/functions/send', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message })
-          });
-
-          alert('送信しました！');
-        }
-      </script>
+      
     </main>
   </div>
 
