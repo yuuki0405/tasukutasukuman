@@ -19,11 +19,7 @@ if (empty($_SESSION['email'])) {
       <div class="header-logo">🧠 LINE爆撃くん</div>
       <nav class="nav-menu">
         <ul>
-          <li><a href="login.php">📝 新規会員登録/ログイン</a></li>
           <li><a href="Top.php">🏠 ホーム</a></li>
-          <li><a href="goningumi.php">👥 グループ情報</a></li>
-          <li><a href="mypage.php">👤 マイページ（ユーザー情報）</a></li>
-          <li><a href="zinkaku.php">🔔 通知キャラ設定ガチャ</a></li>
           <li><p><?php echo $_SESSION['email'] ?></p></li>
           <li><a href="login.php">ログアウト</a></li>
         </ul>
