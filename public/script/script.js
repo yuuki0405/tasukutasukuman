@@ -16,6 +16,7 @@ async function loadTasks() {
   const { data, error } = await supabase
     .from('todos')
     .select('*')
+    .eq('email', window.userEmail)   // ✅ email一致
     .order('date', { ascending: true })
 
   if (error) {
@@ -102,7 +103,8 @@ document.getElementById('taskForm').addEventListener('submit', async (e) => {
   const { error } = await supabase.from('todos').insert({
     task,
     date,
-    time
+    time,
+    email: window.userEmail   // ✅ emailも保存
   })
 
   if (error) {
