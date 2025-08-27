@@ -5,6 +5,8 @@ if (empty($_SESSION['email'])) {
     header("Location: login.php");
     exit();
 }
+
+$email = $_SESSION['email']; // ← ここで変数に格納
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -20,7 +22,7 @@ if (empty($_SESSION['email'])) {
       <nav class="nav-menu">
         <ul>
           <li><a href="Top.php">🏠 ホーム</a></li>
-          <li><p><?php echo $_SESSION['email'] ?></p></li>
+          <li><p><?php echo htmlspecialchars($_SESSION['email']); ?></p></li>
           <li><a href="login.php">ログアウト</a></li>
         </ul>
       </nav>
@@ -47,22 +49,22 @@ if (empty($_SESSION['email'])) {
         <button type="submit">追加</button>
       </form>
 
-      <!-- ✅ 修正済：LINEログインリンク -->
       <a href="https://line.me/R/ti/p/%40578xtcun" target="_blank">
-      <img src="https://scdn.line-apps.com/n/line_add_friends/btn/ja.png" alt="LINEで友だち追加">
-        </a>
-      
-     
-
+        <img src="https://scdn.line-apps.com/n/line_add_friends/btn/ja.png" alt="LINEで友だち追加">
+      </a>
 
       <p id="message" style="color:red;"></p>
 
       <h2>タスク一覧</h2>
       <div id="taskList"></div>
 
-      
     </main>
   </div>
+
+  <!-- ✅ PHPからJSへセッション変数を埋め込む -->
+  <script>
+    window.userEmail = "<?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8'); ?>";
+  </script>
 
   <script type="module" src="script/script.js"></script>
 </body>
