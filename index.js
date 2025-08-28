@@ -1,11 +1,11 @@
 require('dotenv').config();
-const express   = require('express');
-const line      = require('@line/bot-sdk');
+const express       = require('express');
+const line          = require('@line/bot-sdk');
 const { createClient } = require('@supabase/supabase-js');
-const bodyParser = require('body-parser');
-const path      = require('path');
-const cron      = require('node-cron');
-const dayjs     = require('dayjs');
+const bodyParser    = require('body-parser');
+const path          = require('path');
+const cron          = require('node-cron');
+const dayjs         = require('dayjs');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -30,7 +30,7 @@ const supabase = createClient(
 );
 
 // エラーハンドリング
-process.on('uncaughtException', err => console.error('[uncaughtException]', err));
+process.on('uncaughtException',  err => console.error('[uncaughtException]', err));
 process.on('unhandledRejection', err => console.error('[unhandledRejection]', err));
 
 // 期限切れ判定
@@ -51,7 +51,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     try {
       // --- タスク追加 ---
       if (/^(追加|登録)\s+/u.test(text)) {
-        const parts = text.replace(/^(追加|登録)\s+/u, '').trim().split(/\s+/);
+        const parts    = text.replace(/^(追加|登録)\s+/u, '').trim().split(/\s+/);
         const taskText = parts[0] || null;
         const datePart = parts[1] || null;
         const timePart = parts[2] || null;
@@ -64,9 +64,9 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           continue;
         }
 
-        const today = dayjs().format('YYYY-MM-DD');
-        const deadlineDate = datePart || today;
-        const deadlineTime = timePart || null;
+        const today         = dayjs().format('YYYY-MM-DD');
+        const deadlineDate  = datePart || today;
+        const deadlineTime  = timePart || null;
 
         // メールアドレス取得
         let userEmail = null;
@@ -89,13 +89,13 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         const { error } = await supabase
           .from('todos')
           .insert({
-            user_id: userId,
-            task: taskText,
-            date: deadlineDate,
-            time: deadlineTime,
-            status: '未完了',
-            is_notified: false,
-            email: userEmail
+            user_id:    userId,
+            task:       taskText,
+            date:       deadlineDate,
+            time:       deadlineTime,
+            status:     '未完了',
+            is_notified:false,
+            email:      userEmail
           });
         if (error) throw error;
 
@@ -122,7 +122,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           .select('id')
           .eq('line_user_id', userId)
           .single();
-
         if (selectError && selectError.code !== 'PGRST116') throw selectError;
 
         if (existingUser) {
@@ -163,8 +162,11 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           .select('id, task, date, time, status, is_notified, email')
           .order('date', { ascending: true })
           .order('time', { ascending: true });
-        if (userEmail) query = query.or(`user_id.eq.${userId},email.eq.${userEmail}`);
-        else query = query.eq('user_id', userId);
+        if (userEmail) {
+          query = query.or(`user_id.eq.${userId},email.eq.${userEmail}`);
+        } else {
+          query = query.eq('user_id', userId);
+        }
 
         const { data, error } = await query;
         if (error) throw error;
@@ -197,8 +199,11 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           .select('id, task, date, time, status, is_notified, email')
           .order('date', { ascending: true })
           .order('time', { ascending: true });
-        if (userEmail) query = query.or(`user_id.eq.${userId},email.eq.${userEmail}`);
-        else query = query.eq('user_id', userId);
+        if (userEmail) {
+          query = query.or(`user_id.eq.${userId},email.eq.${userEmail}`);
+        } else {
+          query = query.eq('user_id', userId);
+        }
 
         const { data, error } = await query;
         if (error) throw error;
@@ -293,9 +298,7 @@ cron.schedule('* * * * *', async () => {
   }
 });
 
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
+// サーバ起動はここだけ
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
