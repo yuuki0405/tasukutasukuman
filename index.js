@@ -19,7 +19,7 @@ app.get('/', (req, res) => {
 // LINE Bot 設定
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
-  channelSecret:       process.env.CHANNEL_SECRET,
+  channelSecret:      process.env.CHANNEL_SECRET,
 };
 const client = new line.Client(config);
 
@@ -37,13 +37,46 @@ app.use(bodyParser.json({
   verify: (req, res, buf) => { req.rawBody = buf.toString(); }
 }));
 
-// 共通関数: 期限切れ判定
+// 催促／焦りメッセージ集
+const URGE_PHRASES = {
+  normal: [
+    '⏰ タスク「${task}」、まだ終わっていませんよ！',
+    '🔥 早く「${task}」を片付けましょう！',
+    '💡 忘れないうちに「${task}」をやってください！'
+  ],
+  near: [
+    '⚠️ 「${task}」の締め切りが迫ってます！急いで！',
+    '😰 締め切りまであと少し…「${task}」頑張って！'
+  ],
+  overdue: [
+    '💣 もう期限過ぎてます！「${task}」今すぐやれ！！',
+    '😱 締め切り超過！「${task}」を最優先で！'
+  ]
+};
+
+// 共通: 期限切れ判定
 function isOverdue(row) {
   if (!row.date || !row.time) return false;
   const deadline = dayjs(`${row.date} ${row.time}`, 'YYYY-MM-DD HH:mm');
   const now      = dayjs();
   console.log(`[DEBUG] 現在時刻: ${now.format('YYYY-MM-DD HH:mm:ss')} / 締切: ${deadline.format('YYYY-MM-DD HH:mm')}`);
   return deadline.isBefore(now);
+}
+
+// 共通: 催促メッセージ作成
+function getUrgencyMessage(row) {
+  const deadline = dayjs(`${row.date} ${row.time}`, 'YYYY-MM-DD HH:mm');
+  const now      = dayjs();
+  const diffMin  = deadline.diff(now, 'minute');
+  let category;
+
+  if (diffMin < 0)        category = 'overdue';
+  else if (diffMin <= 10) category = 'near';
+  else                     category = 'normal';
+
+  const phrases = URGE_PHRASES[category];
+  const template = phrases[Math.floor(Math.random() * phrases.length)];
+  return template.replace(/\$\{task\}/g, row.task_text);
 }
 
 // ===== LINE Webhook =====
@@ -77,11 +110,11 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         const { error } = await supabase
           .from('tasks')
           .insert({
-            user_id:    userId,
-            task_text:  taskText,
-            date:       deadlineDate,
-            time:       deadlineTime,
-            done:       false,
+            user_id:     userId,
+            task_text:   taskText,
+            date:        deadlineDate,
+            time:        deadlineTime,
+            done:        false,
             is_notified: false
           });
 
@@ -121,16 +154,14 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
           // 催促: 未完了なら必ず通知
           if (!row.done) {
-            await client.pushMessage(userId, {
-              type: 'text',
-              text: `⏰ タスク「${row.task_text}」はまだ終わっていません！`
-            });
+            const urgeMsg = getUrgencyMessage(row);
+            await client.pushMessage(userId, { type: 'text', text: urgeMsg });
           }
 
           // 爆撃: 期限切れかつ未通知
           if (overdue && !row.done && !row.is_notified) {
             await client.pushMessage(userId, [
-              { type: 'text', text: `💣 タスク「${row.task_text}」の締め切りを過ぎています！` },
+              { type: 'text',    text: `💣 タスク「${row.task_text}」の締め切りを過ぎています！` },
               { type: 'sticker', packageId: '446', stickerId: '1988' }
             ]);
             await supabase
@@ -147,7 +178,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // --- 完了(状態更新) ---
+      // --- 完了 (状態更新) ---
       if (/^完了\s*/.test(text)) {
         const taskName = text.replace(/^完了\s*/, '').trim();
         if (!taskName) {
@@ -194,7 +225,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   res.sendStatus(200);
 });
 
-// ===== 定期爆撃チェック(毎分) =====
+// ===== 定期爆撃チェック (毎分) =====
 cron.schedule('* * * * *', async () => {
   const { data, error } = await supabase
     .from('tasks')
@@ -212,7 +243,7 @@ cron.schedule('* * * * *', async () => {
   for (const row of data) {
     if (isOverdue(row)) {
       await client.pushMessage(row.user_id, [
-        { type: 'text',   text: `💣 まだ終わってないタスク「${row.task_text}」を早くやれ！！` },
+        { type: 'text',    text: `💣 まだ終わってないタスク「${row.task_text}」を早くやれ！！` },
         { type: 'sticker', packageId: '446', stickerId: '1988' }
       ]);
       await supabase
