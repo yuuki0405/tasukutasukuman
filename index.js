@@ -190,86 +190,111 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
       // --- 進捗確認 ---
       if (text === '進捗確認') {
-        const { data, error } = await supabase
-          .from('free_users')
-          .select('id, task_text, date, time, done')
-          .eq('user_id', userId)
+        // まずユーザーのメールアドレスを取得
+        let userEmail = null;
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('email')
+          .eq('line_user_id', lineUserId)
+          .single();
+
+        if (!userError && userData) {
+          userEmail = userData.email;
+        }
+
+        // todos から lineUserId または email が一致するものを取得
+        let query = supabase
+          .from('todos')
+          .select('id, task, date, time, status, is_notified, email')
           .order('date', { ascending: true })
           .order('time', { ascending: true });
-        if (error) throw error;
 
+        if (userEmail) {
+          query = query.or(`user_id.eq.${lineUserId},email.eq.${userEmail}`);
+        } else {
+          query = query.eq('user_id', lineUserId);
+        }
+
+        const { data, error } = await query;
+
+        if (error) throw error;
         if (!data.length) {
           await client.replyMessage(event.replyToken, {
             type: 'text',
-            text: '📭 登録されたタスクがありません。'
-          });
-          continue;
-        }
-
-        // 1) 一覧を reply
-        const lines = data.map(r => {
-          const status = r.done ? '✅ 完了' : '⌛ 未完了';
-          const dt     = `${r.date || ''} ${r.time || ''}`.trim() || '未定';
-          return `🔹 ${r.task_text} - ${dt} [${status}]`;
-        });
-        await client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: lines.join('\n')
-        });
-
-        // 2) 未完了タスクを催促(push)
-        for (const row of data) {
-          if (!row.done) {
-            const urgeMsg = getUrgencyMessage(row);
-            await client.pushMessage(userId, {
-              type: 'text',
-              text: urgeMsg
-            });
-          }
-        }
-        continue;
-      }
-
-      // --- 締め切り確認 ---
-      if (text === '締め切り確認') {
-        const { data, error } = await supabase
-          .from('free_users')
-          .select('id, task_text, date, time, done, is_notified')
-          .eq('user_id', userId)
-          .order('date', { ascending: true })
-          .order('time', { ascending: true });
-        if (error) throw error;
-
-        if (!data.length) {
-          await client.replyMessage(event.replyToken, {
-            type: 'text',
-            text: '📭 登録されたタスクがありません。'
+            text: '📭 進捗中のタスクはありません。'
           });
           continue;
         }
 
         const lines = [];
         for (const row of data) {
-          const status = row.done ? '✅ 完了' : '⌛ 未完了';
-          const dt     = `${row.date || ''} ${row.time || ''}`.trim() || '未定';
-          lines.push(`🔹 ${row.task_text} - ${dt} [${status}]`);
+          const deadlineStr = `${row.date || ''} ${row.time || ''}`.trim();
+          lines.push(`🔹 ${row.task} - ${deadlineStr || '未定'} [${row.status}]`);
+        }
 
-          // 爆撃: 期限超過かつ未通知
-          if (isOverdue(row) && !row.done && !row.is_notified) {
-            await client.pushMessage(userId, [
-              { type: 'text',    text: `💣 タスク「${row.task_text}」の締め切りを過ぎています！` },
+        await client.replyMessage(event.replyToken, { type: 'text', text: lines.join('\n') });
+        continue;
+      }
+
+
+      // --- 締め切り確認 ---
+      if (text === '締め切り確認') {
+        // まずユーザーのメールアドレスを取得
+        let userEmail = null;
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('email')
+          .eq('line_user_id', lineUserId)
+          .single();
+
+        if (!userError && userData) {
+          userEmail = userData.email;
+        }
+
+        // todos から lineUserId または email が一致するものを取得
+        let query = supabase
+          .from('todos')
+          .select('id, task, date, time, status, is_notified, email')
+          .order('date', { ascending: true })
+          .order('time', { ascending: true });
+
+        if (userEmail) {
+          query = query.or(`user_id.eq.${lineUserId},email.eq.${userEmail}`);
+        } else {
+          query = query.eq('user_id', lineUserId);
+        }
+
+        const { data, error } = await query;
+
+        if (error) throw error;
+        if (!data.length) {
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '📭 登録されたタスクはありません。'
+          });
+          continue;
+        }
+
+        const lines = [];
+        for (const row of data) {
+          const deadlineStr = `${row.date || ''} ${row.time || ''}`.trim();
+          const overdue = isOverdue(row);
+
+          lines.push(`🔹 ${row.task} - ${deadlineStr || '未定'} [${row.status}]`);
+
+          if (overdue && row.status === '未完了' && !row.is_notified) {
+            await client.pushMessage(lineUserId, [
+              { type: 'text', text: `💣 タスク「${row.task}」の締め切りを過ぎています！` },
               { type: 'sticker', packageId: '446', stickerId: '1988' }
             ]);
             await supabase
-              .from('free_users')
+              .from('todos')
               .update({ is_notified: true })
               .eq('id', row.id);
           }
         }
-        await client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: lines.join('\n')
-        });
+
+        await client.replyMessage(event.replyToken, { type: 'text', text: lines.join('\n') });
         continue;
       }
 
