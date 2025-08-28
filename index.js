@@ -15,9 +15,9 @@ dayjsBase.extend(timezone);
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// タイムゾーン付き dayjs
+// JST での現在時刻を取得
 function nowJST() {
-  return dayjsBase().tz('Asia/Tokyo');
+  return dayjsBase.tz('Asia/Tokyo');
 }
 
 // 静的ファイル配信
@@ -50,7 +50,7 @@ app.use(bodyParser.json({
 // 催促／焦りメッセージ集
 const URGE_PHRASES = {
   normal: [
-    '⏰ タスク「${task}」、まだ終わっていませんよ！',
+    '⏰ 「${task}」、まだ終わっていませんよ！',
     '🔥 早く「${task}」を片付けましょう！',
     '💡 忘れないうちに「${task}」をやってください！'
   ],
@@ -67,26 +67,34 @@ const URGE_PHRASES = {
 // 期限切れ判定
 function isOverdue(row) {
   if (!row.date || !row.time) return false;
-  const deadline = dayjsBase.tz(`${row.date} ${row.time}`, 'YYYY-MM-DD HH:mm', 'Asia/Tokyo');
-  const now      = nowJST();
+  const deadline = dayjsBase.tz(
+    `${row.date} ${row.time}`,
+    'YYYY-MM-DD HH:mm',
+    'Asia/Tokyo'
+  );
+  const now = nowJST();
   console.log(`[DEBUG] 現在: ${now.format('YYYY-MM-DD HH:mm:ss')} / 締切: ${deadline.format('YYYY-MM-DD HH:mm')}`);
   return deadline.isBefore(now);
 }
 
-// 催促メッセージを取得
+// 催促メッセージ生成
 function getUrgencyMessage(row) {
-  const deadline = dayjsBase.tz(`${row.date} ${row.time}`, 'YYYY-MM-DD HH:mm', 'Asia/Tokyo');
-  const now      = nowJST();
-  const diffMin  = deadline.diff(now, 'minute');
-  let category;
+  const deadline = dayjsBase.tz(
+    `${row.date} ${row.time}`,
+    'YYYY-MM-DD HH:mm',
+    'Asia/Tokyo'
+  );
+  const now = nowJST();
+  const diffMin = deadline.diff(now, 'minute');
+  let category = diffMin < 0
+    ? 'overdue'
+    : diffMin <= 10
+      ? 'near'
+      : 'normal';
 
-  if (diffMin < 0)        category = 'overdue';
-  else if (diffMin <= 10) category = 'near';
-  else                     category = 'normal';
-
-  const tmpl     = URGE_PHRASES[category];
-  const template = tmpl[Math.floor(Math.random() * tmpl.length)];
-  return template.replace(/\$\{task\}/g, row.task_text);
+  const templates = URGE_PHRASES[category];
+  const tmpl = templates[Math.floor(Math.random() * templates.length)];
+  return tmpl.replace(/\$\{task\}/g, row.task_text);
 }
 
 // ===== LINE Webhook =====
@@ -96,14 +104,15 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     const userId = event.source.userId;
     const text   = event.message.text.trim();
+    console.log('[Webhook] received text:', text);
 
     try {
       // --- タスク追加 ---
       if (/^(追加|登録)\s+/.test(text)) {
-        const parts     = text.replace(/^(追加|登録)\s*/, '').split(/\s+/);
-        const taskText  = parts[0] || null;
-        const datePart  = parts[1] || null;
-        const timePart  = parts[2] || null;
+        const parts    = text.replace(/^(追加|登録)\s*/, '').split(/\s+/);
+        const taskText = parts[0] || null;
+        const datePart = parts[1] || null;
+        const timePart = parts[2] || null;
 
         if (!taskText) {
           await client.replyMessage(event.replyToken, {
@@ -113,7 +122,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           continue;
         }
 
-        const today        = nowJST().format('YYYY-MM-DD');
+        const today = nowJST().format('YYYY-MM-DD');
         const deadlineDate = datePart || today;
         const deadlineTime = timePart || null;
 
@@ -127,24 +136,28 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
             done:        false,
             is_notified: false
           });
-
         if (error) throw error;
 
-        const replyText = `🆕 タスク「${taskText}」を登録しました` +
-          (deadlineTime ? `（締め切り ${deadlineDate} ${deadlineTime}）` : '');
-        await client.replyMessage(event.replyToken, { type: 'text', text: replyText });
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text:
+            `🆕 タスク「${taskText}」を登録しました` +
+            (deadlineTime
+              ? `（締め切り ${deadlineDate} ${deadlineTime}）`
+              : '')
+        });
         continue;
       }
 
-      // --- 進捗確認／締め切り確認 ---
-      if (text === '進捗確認' || text === '締め切り確認') {
+      // --- 進捗確認 ---
+      if (text === '進捗確認') {
         const { data, error } = await supabase
           .from('tasks')
-          .select('id, task_text, date, time, done, is_notified')
+          .select('id, task_text, date, time, done')
           .order('date', { ascending: true })
           .order('time', { ascending: true });
-
         if (error) throw error;
+
         if (!data.length) {
           await client.replyMessage(event.replyToken, {
             type: 'text',
@@ -153,20 +166,56 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           continue;
         }
 
+        // 一覧表示
+        const lines = data.map(r => {
+          const status = r.done ? '✅ 完了' : '⌛ 未完了';
+          const dt = `${r.date || ''} ${r.time || ''}`.trim() || '未定';
+          return `🔹 ${r.task_text} - ${dt} [${status}]`;
+        });
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: lines.join('\n')
+        });
+
+        // 未完了タスクを催促
+        for (const row of data) {
+          if (!row.done) {
+            const urgeMsg = getUrgencyMessage(row);
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: urgeMsg
+            });
+          }
+        }
+        continue;
+      }
+
+      // --- 締め切り確認 ---
+      if (text === '締め切り確認') {
+        const { data, error } = await supabase
+          .from('tasks')
+          .select('id, task_text, date, time, done, is_notified')
+          .order('date', { ascending: true })
+          .order('time', { ascending: true });
+        if (error) throw error;
+
+        if (!data.length) {
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '📭 登録されたタスクがありません。'
+          });
+          continue;
+        }
+
+        // 一覧表示
         const lines = [];
         for (const row of data) {
-          const statusLabel = row.done ? '✅ 完了' : '⌛ 未完了';
-          const deadlineStr = `${row.date || ''} ${row.time || ''}`.trim();
-          lines.push(`🔹 ${row.task_text} - ${deadlineStr || '未定'} [${statusLabel}]`);
+          const status = row.done ? '✅ 完了' : '⌛ 未完了';
+          const dt = `${row.date || ''} ${row.time || ''}`.trim() || '未定';
+          lines.push(`🔹 ${row.task_text} - ${dt} [${status}]`);
 
-          // 進捗確認では未完了タスクを催促
-          if (text === '進捗確認' && !row.done) {
-            const urgeMsg = getUrgencyMessage(row);
-            await client.pushMessage(userId, { type: 'text', text: urgeMsg });
-          }
-
-          // 締め切り確認では期限切れタスクに爆撃
-          if (text === '締め切り確認' && isOverdue(row) && !row.done && !row.is_notified) {
+          // 締め切り超過タスクに爆撃
+          if (isOverdue(row) && !row.done && !row.is_notified) {
             await client.pushMessage(userId, [
               { type: 'text',    text: `💣 タスク「${row.task_text}」の締め切りを過ぎています！` },
               { type: 'sticker', packageId: '446', stickerId: '1988' }
@@ -195,12 +244,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           });
           continue;
         }
-
         const { error } = await supabase
           .from('tasks')
           .update({ done: true })
           .eq('task_text', taskName);
-
         if (error) throw error;
 
         await client.replyMessage(event.replyToken, {
@@ -232,7 +279,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   res.sendStatus(200);
 });
 
-// ===== 定期爆撃チェック(毎分) =====
+// ===== 定期爆撃チェック (毎分) =====
 cron.schedule('* * * * *', async () => {
   const { data, error } = await supabase
     .from('tasks')
