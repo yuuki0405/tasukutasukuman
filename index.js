@@ -84,44 +84,109 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     try {
       // --- タスク追加 ---
       if (/^(追加|登録)\s+/.test(text)) {
-        const parts     = text.replace(/^(追加|登録)\s*/, '').split(/\s+/);
-        const taskText  = parts[0] || null;
-        const datePart  = parts[1] || null;
-        const timePart  = parts[2] || null;
+        const parts = text.replace(/^(追加|登録)\s*/, '').trim().split(/\s+/);
+        const taskText = parts[0] || null;
+        const datePart = parts[1] || null;
+        const timePart = parts[2] || null;
 
         if (!taskText) {
           await client.replyMessage(event.replyToken, {
             type: 'text',
-            text: '⚠️ タスク名を指定してください。\n例: 追加 宿題 2025-08-30 21:00'
+            text: '⚠️ 内容を指定してください。\n例: 追加 宿題 2025-08-30 21:00'
           });
           continue;
         }
 
-        const today        = dayjs().format('YYYY-MM-DD');
+        // 日付未指定は今日に設定
+        const today = dayjs().format('YYYY-MM-DD');
         const deadlineDate = datePart || today;
         const deadlineTime = timePart || null;
 
-        // free_users テーブルに挿入
+        // users テーブルからメールアドレスを取得
+        let userEmail = null;
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('email')
+          .eq('line_user_id', lineUserId)
+          .single();
+
+        if (!userError && userData) {
+          userEmail = userData.email;
+        }
+
+        // todos に保存
         const { error } = await supabase
-          .from('free_users')
+          .from('todos')
           .insert({
-            user_id:     userId,
-            task_text:   taskText,
-            date:        deadlineDate,
-            time:        deadlineTime,
-            done:        false,
-            is_notified: false
+            user_id: lineUserId,
+            task: taskText,
+            date: deadlineDate,
+            time: deadlineTime,
+            status: '未完了',
+            is_notified: false,
+            email: userEmail   // ←ここでセット！
           });
+
         if (error) throw error;
 
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text:
-            `🆕 タスク「${taskText}」を登録しました` +
-            (deadlineTime ? `（締め切り ${deadlineDate} ${deadlineTime}）` : '')
+          text: `🆕 タスク「${taskText}」を登録しました${deadlineTime ? `（締め切り ${deadlineDate} ${deadlineTime}）` : ''}`
         });
         continue;
       }
+
+
+      // --- メールアドレス登録 ---
+      if (/^メールアドレス\s+/.test(text)) {
+        const email = text.replace(/^メールアドレス\s*/, '').trim();
+
+        if (!email) {
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '⚠️ メールアドレスを入力してください。\n例: メールアドレス sample@example.com'
+          });
+          continue;
+        }
+
+        // users テーブルに保存（存在すれば更新、なければ新規作成）
+        const { data: existingUser, error: selectError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('line_user_id', lineUserId)
+          .single();
+
+        if (selectError && selectError.code !== 'PGRST116') { // データなし以外はエラー
+          throw selectError;
+        }
+
+        if (existingUser) {
+          // 更新
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({ email })
+            .eq('id', existingUser.id);
+          if (updateError) throw updateError;
+
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: `📧 メールアドレスを更新しました: ${email}`
+          });
+        } else {
+          // 新規
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert({ line_user_id: lineUserId, email });
+          if (insertError) throw insertError;
+
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: `📧 メールアドレスを登録しました: ${email}`
+          });
+        }
+        continue;
+      }
+
 
       // --- 進捗確認 ---
       if (text === '進捗確認') {
