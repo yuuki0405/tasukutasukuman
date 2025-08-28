@@ -33,7 +33,18 @@ const supabase = createClient(
 process.on('uncaughtException', err => console.error('[uncaughtException]', err));
 process.on('unhandledRejection', reason => console.error('[unhandledRejection]', reason));
 
-app.use(bodyParser.json({ verify: (req, res, buf) => { req.rawBody = buf.toString(); }}));
+app.use(bodyParser.json({
+  verify: (req, res, buf) => { req.rawBody = buf.toString(); }
+}));
+
+// 共通: 期限切れか判定
+function isOverdue(row) {
+  if (!row.date || !row.time) return false;
+  const deadline = dayjs(`${row.date} ${row.time}`, 'YYYY-MM-DD HH:mm');
+  const now = dayjs();
+  console.log(`[DEBUG] 現在時刻: ${now.format('YYYY-MM-DD HH:mm:ss')} / 締切: ${deadline.format('YYYY-MM-DD HH:mm')}`);
+  return deadline.isBefore(now);
+}
 
 // ===== LINE Webhook =====
 app.post('/webhook', line.middleware(config), async (req, res) => {
@@ -42,7 +53,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     const lineUserId = event.source.userId;
     const text = event.message.text.trim();
-    const now = dayjs();
 
     try {
       // --- タスク追加 ---
@@ -60,8 +70,9 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           continue;
         }
 
-        const today = new Date();
-        const deadlineDate = datePart || today.toISOString().split('T')[0];
+        // 日付未指定は今日に設定
+        const today = dayjs().format('YYYY-MM-DD');
+        const deadlineDate = datePart || today;
         const deadlineTime = timePart || null;
 
         const { error } = await supabase
@@ -94,14 +105,17 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
         if (error) throw error;
         if (!data.length) {
-          await client.replyMessage(event.replyToken, { type: 'text', text: '📭 登録されたタスクはありません。' });
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '📭 登録されたタスクはありません。'
+          });
           continue;
         }
 
         const lines = [];
         for (const row of data) {
           const deadlineStr = `${row.date || ''} ${row.time || ''}`.trim();
-          const overdue = row.date && row.time && dayjs(`${row.date} ${row.time}`).isBefore(now);
+          const overdue = isOverdue(row);
 
           lines.push(`🔹 ${row.task} - ${deadlineStr || '未定'} [${row.status}]`);
 
@@ -110,14 +124,12 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
               { type: 'text', text: `💣 タスク「${row.task}」の締め切りを過ぎています！` },
               { type: 'sticker', packageId: '446', stickerId: '1988' }
             ]);
-
             await supabase
               .from('todos')
               .update({ is_notified: true })
               .eq('id', row.id);
           }
         }
-
         await client.replyMessage(event.replyToken, { type: 'text', text: lines.join('\n') });
         continue;
       }
@@ -132,7 +144,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           });
           continue;
         }
-
         const { error } = await supabase
           .from('todos')
           .delete()
@@ -150,7 +161,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       // --- デフォルト応答 ---
       await client.replyMessage(event.replyToken, {
         type: 'text',
-        text: '📌 コマンド:\n追加 タスク名 [20××-00-00] [00:00]\n締め切り確認\n完了 タスク名'
+        text: '📌 コマンド:\n追加 タスク名 [YYYY-MM-DD] [HH:mm]\n締め切り確認\n完了 タスク名'
       });
 
     } catch (err) {
@@ -166,7 +177,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
 // ===== 定期爆撃チェック（毎分） =====
 cron.schedule('* * * * *', async () => {
-  const now = dayjs();
   const { data, error } = await supabase
     .from('todos')
     .select('id, user_id, task, date, time, status, is_notified')
@@ -181,21 +191,11 @@ cron.schedule('* * * * *', async () => {
   }
 
   for (const row of data) {
-    if (!row.date || !row.time) continue;
-
-    if (dayjs(`${row.date} ${row.time}`).isBefore(now)) {
-      // ステッカー → テキスト順で通知
-      await client.pushMessage(row.user_id, {
-        type: 'sticker',
-        packageId: '446',
-        stickerId: '1988'
-      });
-
-      await client.pushMessage(row.user_id, {
-        type: 'text',
-        text: `💣 まだ終わってないタスク「${row.task}」を早くやれ！！`
-      });
-
+    if (isOverdue(row)) {
+      await client.pushMessage(row.user_id, [
+        { type: 'text', text: `💣 まだ終わってないタスク「${row.task}」を早くやれ！！` },
+        { type: 'sticker', packageId: '446', stickerId: '1988' }
+      ]);
       await supabase
         .from('todos')
         .update({ is_notified: true })
