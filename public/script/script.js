@@ -111,8 +111,6 @@ document.getElementById('taskForm').addEventListener('submit', async (e) => {
       
     }
     
-    const { error } = await supabase.from('todos').insert([newTask])
-    console.log("送信データ:", newTask)  // ✅ これで確認
   ])
 
   if (error) {
