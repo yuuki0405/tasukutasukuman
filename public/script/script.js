@@ -106,6 +106,7 @@ document.getElementById('taskForm').addEventListener('submit', async (e) => {
       date,
       time,
       status: '未完了',         // ✅ 常に未完了で登録
+      is_notified: false,
       email: window.userEmail // ✅ emailも保存
       
     }
