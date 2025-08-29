@@ -44,7 +44,7 @@ function renderTasks(tasks) {
         <strong>${task.task}</strong><br>
         <small>締切: ${task.date} ${task.time}</small>
       </div>
-      <button class="delete" data-id="${task.id}">削除</button>
+      <button class="delete" data-id="${task.id}">完了</button>
     `
     taskList.appendChild(div)
 
