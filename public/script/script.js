@@ -110,9 +110,7 @@ document.getElementById('taskForm').addEventListener('submit', async (e) => {
       email: window.userEmail // ✅ emailも保存
       
     }
-     .select()
-
-console.log("Insert result:", data, error)
+    
   ])
   
 
