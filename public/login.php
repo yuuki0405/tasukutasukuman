@@ -17,7 +17,7 @@ if(isset($_POST['email'])){
 <head>
   <meta charset="UTF-8" />
   <title>新規登録 | LINE爆撃くん</title>
-  <link rel="stylesheet" href="css/style2.css">
+  <link rel="stylesheet" href="css/login.css">
 </head>
 <body>
   <div class="wrapper">
