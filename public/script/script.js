@@ -105,8 +105,9 @@ document.getElementById('taskForm').addEventListener('submit', async (e) => {
       task,
       date,
       time,
-      email: window.userEmail, // ✅ emailも保存
-      status: '未完了'         // ✅ 常に未完了で登録
+      status: '未完了',         // ✅ 常に未完了で登録
+      email: window.userEmail // ✅ emailも保存
+      
     }
     
     const { error } = await supabase.from('todos').insert([newTask])
