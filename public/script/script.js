@@ -110,11 +110,11 @@ document.getElementById('taskForm').addEventListener('submit', async (e) => {
       email: window.userEmail // ✅ emailも保存
       
     }
-    
-  ])
-   .select()
+     .select()
 
 console.log("Insert result:", data, error)
+  ])
+  
 
   if (error) {
     message.textContent = '追加失敗: ' + error.message
