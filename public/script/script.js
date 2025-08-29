@@ -104,7 +104,7 @@ document.getElementById('taskForm').addEventListener('submit', async (e) => {
     task,
     date,
     time,
-    email: window.userEmail   // ✅ emailも保存
+    email: window.userEmail,   // ✅ emailも保存
     status: '未完了'
   })
 
