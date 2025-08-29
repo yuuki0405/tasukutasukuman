@@ -134,4 +134,3 @@ if (Notification.permission !== 'granted') {
 document.addEventListener('DOMContentLoaded', loadTasks)
 
 
-このプログラムのタスク追加のところstatusに’未完了’と入れたいのに入りません。
