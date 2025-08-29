@@ -100,16 +100,19 @@ document.getElementById('taskForm').addEventListener('submit', async (e) => {
     return
   }
 
-  const { error } = await supabase.from('todos').insert({
-    task,
-    date,
-    time,
-    email: window.userEmail,   // ✅ emailも保存
-    status: '未完了'
-  })
+  const { error } = await supabase.from('todos').insert([
+    {
+      task,
+      date,
+      time,
+      email: window.userEmail, // ✅ emailも保存
+      status: '未完了'         // ✅ 常に未完了で登録
+    }
+  ])
 
   if (error) {
     message.textContent = '追加失敗: ' + error.message
+    console.error(error)
   } else {
     message.textContent = '追加完了！'
     taskInput.value = ''
